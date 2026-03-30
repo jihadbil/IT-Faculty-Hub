@@ -1,0 +1,19 @@
+packages:
+  "framer-motion": "For smooth page transitions and micro-interactions"
+  "react-hook-form": "For robust form handling"
+  "@hookform/resolvers": "For Zod form validation"
+  "zod": "For form schema validation"
+  "recharts": "For dashboard statistics visualization"
+  "clsx": "For dynamic class merging"
+  "tailwind-merge": "For class merging"
+  "date-fns": "For schedule time formatting"
+
+images:
+  - path: "artifacts/college-platform/public/images/hero-bg.png"
+    description: "Abstract geometric background in deep academic blue and teal with soft glowing connections, perfect for an IT college dashboard"
+    aspect_ratio: "16:9"
+
+notes:
+  - The application is entirely in Arabic, so RTL direction is enforced.
+  - Using generated React Query hooks from @workspace/api-client-react.
+  - Implementing custom highly-polished UI components to ensure premium look.
