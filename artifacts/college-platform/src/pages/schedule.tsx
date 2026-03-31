@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useGetSchedule, useGetCourses, useCreateScheduleEntry, useDeleteScheduleEntry } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, MapPin, Clock } from "lucide-react";
+import { Plus, Trash2, MapPin, Clock, CalendarDays } from "lucide-react";
 import { Button, Card, Modal, Select, Input, Badge } from "@/components/ui/shared";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
