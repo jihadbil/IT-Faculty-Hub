@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { departmentsTable } from "./departments";
 
 export const coursesTable = pgTable("courses", {
   id: serial("id").primaryKey(),
@@ -12,6 +13,7 @@ export const coursesTable = pgTable("courses", {
   credits: integer("credits").notNull(),
   instructor: text("instructor"),
   color: text("color").default("#3B82F6"),
+  departmentId: integer("department_id").references(() => departmentsTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(username, password);
-      setLocation(user.role === "teacher" ? "/" : "/student");
+      setLocation(user.role === "admin" ? "/admin" : user.role === "teacher" ? "/" : "/student");
     } catch (err: any) {
       setError(err?.message || "فشل تسجيل الدخول");
     } finally {
@@ -92,7 +92,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          الحساب الافتراضي للأستاذ: <span className="font-mono" dir="ltr">admin</span> / <span className="font-mono" dir="ltr">admin123</span>
+          المدير العام: <span className="font-mono" dir="ltr">admin</span> / <span className="font-mono" dir="ltr">admin123</span> · الأستاذ: <span className="font-mono" dir="ltr">teacher</span> / <span className="font-mono" dir="ltr">teacher123</span>
         </p>
       </motion.div>
     </div>

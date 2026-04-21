@@ -13,6 +13,10 @@ import StudentCourses from "@/pages/student/courses";
 import StudentCourse from "@/pages/student/course";
 import StudentFiles from "@/pages/student/files";
 import StudentSchedule from "@/pages/student/schedule";
+import AdminDashboard from "@/pages/admin/dashboard";
+import AdminDepartments from "@/pages/admin/departments";
+import AdminTeachers from "@/pages/admin/teachers";
+import AdminStudents from "@/pages/admin/students";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import NotFound from "@/pages/not-found";
@@ -35,31 +39,28 @@ function FullScreenLoader() {
   );
 }
 
+function homeFor(role: Role): string {
+  return role === "admin" ? "/admin" : role === "teacher" ? "/" : "/student";
+}
+
 function Protected({
-  role,
+  roles,
   children,
 }: {
-  role?: Role;
+  roles?: Role[];
   children: React.ReactNode;
 }) {
   const { user, loading } = useAuth();
-  const [location] = useLocation();
-
   if (loading) return <FullScreenLoader />;
   if (!user) return <Redirect to="/login" />;
-
-  if (role && user.role !== role) {
-    // Send users to their own portal instead of showing 403
-    return <Redirect to={user.role === "teacher" ? "/" : "/student"} />;
-  }
-
+  if (roles && !roles.includes(user.role)) return <Redirect to={homeFor(user.role)} />;
   return <>{children}</>;
 }
 
 function PublicOnly({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <FullScreenLoader />;
-  if (user) return <Redirect to={user.role === "teacher" ? "/" : "/student"} />;
+  if (user) return <Redirect to={homeFor(user.role)} />;
   return <>{children}</>;
 }
 
@@ -67,38 +68,52 @@ function ProtectedLayoutRoutes() {
   return (
     <Layout>
       <Switch>
-        {/* Teacher / Admin */}
-        <Route path="/">
-          <Protected role="teacher"><Dashboard /></Protected>
+        {/* Admin */}
+        <Route path="/admin">
+          <Protected roles={["admin"]}><AdminDashboard /></Protected>
         </Route>
-        <Route path="/courses">
-          <Protected role="teacher"><Courses /></Protected>
+        <Route path="/admin/departments">
+          <Protected roles={["admin"]}><AdminDepartments /></Protected>
         </Route>
-        <Route path="/courses/:id">
-          <Protected role="teacher"><CourseDetails /></Protected>
+        <Route path="/admin/teachers">
+          <Protected roles={["admin"]}><AdminTeachers /></Protected>
         </Route>
-        <Route path="/files">
-          <Protected role="teacher"><Files /></Protected>
-        </Route>
-        <Route path="/schedule">
-          <Protected role="teacher"><Schedule /></Protected>
+        <Route path="/admin/students">
+          <Protected roles={["admin"]}><AdminStudents /></Protected>
         </Route>
 
-        {/* Student portal — accessible to any authenticated user */}
+        {/* Teacher */}
+        <Route path="/">
+          <Protected roles={["teacher"]}><Dashboard /></Protected>
+        </Route>
+        <Route path="/courses">
+          <Protected roles={["teacher"]}><Courses /></Protected>
+        </Route>
+        <Route path="/courses/:id">
+          <Protected roles={["teacher"]}><CourseDetails /></Protected>
+        </Route>
+        <Route path="/files">
+          <Protected roles={["teacher"]}><Files /></Protected>
+        </Route>
+        <Route path="/schedule">
+          <Protected roles={["teacher"]}><Schedule /></Protected>
+        </Route>
+
+        {/* Student */}
         <Route path="/student">
-          <Protected><StudentHome /></Protected>
+          <Protected roles={["student"]}><StudentHome /></Protected>
         </Route>
         <Route path="/student/courses">
-          <Protected><StudentCourses /></Protected>
+          <Protected roles={["student"]}><StudentCourses /></Protected>
         </Route>
         <Route path="/student/courses/:id">
-          <Protected><StudentCourse /></Protected>
+          <Protected roles={["student"]}><StudentCourse /></Protected>
         </Route>
         <Route path="/student/files">
-          <Protected><StudentFiles /></Protected>
+          <Protected roles={["student"]}><StudentFiles /></Protected>
         </Route>
         <Route path="/student/schedule">
-          <Protected><StudentSchedule /></Protected>
+          <Protected roles={["student"]}><StudentSchedule /></Protected>
         </Route>
 
         <Route><NotFound /></Route>

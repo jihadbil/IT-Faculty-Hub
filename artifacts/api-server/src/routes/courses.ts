@@ -27,13 +27,22 @@ router.get("/courses", async (req, res) => {
   }
 });
 
+function pickDepartmentId(body: unknown): number | null | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const v = (body as Record<string, unknown>).departmentId;
+  if (v === null || v === "" || v === undefined) return null;
+  const n = typeof v === "number" ? v : parseInt(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
 router.post("/courses", requireTeacher, async (req, res) => {
   try {
     const parsed = CreateCourseBody.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid request body" });
     }
-    const [course] = await db.insert(coursesTable).values(parsed.data).returning();
+    const departmentId = pickDepartmentId(req.body);
+    const [course] = await db.insert(coursesTable).values({ ...parsed.data, departmentId }).returning();
     res.status(201).json(course);
   } catch (err) {
     req.log.error({ err }, "Failed to create course");
@@ -60,7 +69,8 @@ router.put("/courses/:id", requireTeacher, async (req, res) => {
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const parsed = CreateCourseBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
-    const [course] = await db.update(coursesTable).set(parsed.data).where(eq(coursesTable.id, id)).returning();
+    const departmentId = pickDepartmentId(req.body);
+    const [course] = await db.update(coursesTable).set({ ...parsed.data, departmentId }).where(eq(coursesTable.id, id)).returning();
     if (!course) return res.status(404).json({ message: "Course not found" });
     res.json(course);
   } catch (err) {

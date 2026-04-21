@@ -13,6 +13,9 @@ import {
   LogOut,
   ShieldCheck,
   UserRound,
+  Building2,
+  Users,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -33,9 +36,16 @@ const STUDENT_NAV: NavItem[] = [
   { href: "/student/schedule", label: "جدولي", icon: CalendarDays },
 ];
 
+const ADMIN_NAV: NavItem[] = [
+  { href: "/admin", label: "لوحة المدير", icon: LayoutDashboard },
+  { href: "/admin/departments", label: "الأقسام", icon: Building2 },
+  { href: "/admin/teachers", label: "الأساتذة", icon: Users },
+  { href: "/admin/students", label: "الطلاب", icon: UserRound },
+];
+
 function isActiveLink(location: string, href: string, allHrefs: string[]) {
   if (location === href) return true;
-  if (href === "/" || href === "/student") return false;
+  if (href === "/" || href === "/student" || href === "/admin") return false;
   const moreSpecific = allHrefs.some(h => h !== href && h.startsWith(href + "/") && location.startsWith(h));
   if (moreSpecific) return false;
   return location.startsWith(href);
@@ -46,26 +56,38 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
 
-  const isTeacher = user?.role === "teacher";
-  const navItems = isTeacher ? TEACHER_NAV : STUDENT_NAV;
+  const role = user?.role ?? "student";
+  const navItems = role === "admin" ? ADMIN_NAV : role === "teacher" ? TEACHER_NAV : STUDENT_NAV;
   const allHrefs = navItems.map(i => i.href);
 
   // Distinct theming per portal
-  const theme = isTeacher
-    ? {
-        sidebarBg: "bg-primary",
-        portalLabel: "بوابة الإدارة",
-        roleLabel: "أستاذ / مشرف",
-        roleIcon: <ShieldCheck className="w-4 h-4" />,
-        subTitle: "لوحة الإدارة",
-      }
-    : {
-        sidebarBg: "bg-emerald-700",
-        portalLabel: "بوابة الطالب",
-        roleLabel: "طالب",
-        roleIcon: <UserRound className="w-4 h-4" />,
-        subTitle: "بوابة الطالب",
-      };
+  const theme =
+    role === "admin"
+      ? {
+          sidebarBg: "bg-purple-800",
+          activeText: "text-purple-800",
+          portalLabel: "بوابة المدير العام",
+          roleLabel: "مدير عام",
+          roleIcon: <Crown className="w-4 h-4" />,
+          subTitle: "إدارة الكلية",
+        }
+      : role === "teacher"
+      ? {
+          sidebarBg: "bg-primary",
+          activeText: "text-primary",
+          portalLabel: "بوابة الإدارة",
+          roleLabel: "أستاذ",
+          roleIcon: <ShieldCheck className="w-4 h-4" />,
+          subTitle: "لوحة الإدارة",
+        }
+      : {
+          sidebarBg: "bg-emerald-700",
+          activeText: "text-emerald-700",
+          portalLabel: "بوابة الطالب",
+          roleLabel: "طالب",
+          roleIcon: <UserRound className="w-4 h-4" />,
+          subTitle: "بوابة الطالب",
+        };
 
   const handleLogout = async () => {
     try {
@@ -77,7 +99,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="space-y-2">
       {navItems.map(item => {
         const isActive = isActiveLink(location, item.href, allHrefs);
-        const activeTextClass = isTeacher ? "text-primary" : "text-emerald-700";
+        const activeTextClass = theme.activeText;
         return (
           <Link key={item.href} href={item.href}>
             <span

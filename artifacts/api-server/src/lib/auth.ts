@@ -62,12 +62,23 @@ export const requireAuth: RequestHandler = (req, res, next) => {
   next();
 };
 
+// Allows teachers AND admins (admin > teacher).
 export const requireTeacher: RequestHandler = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ message: "يجب تسجيل الدخول" });
   }
-  if (req.user.role !== "teacher") {
+  if (req.user.role !== "teacher" && req.user.role !== "admin") {
     return res.status(403).json({ message: "هذه الصفحة متاحة للأستاذ فقط" });
+  }
+  next();
+};
+
+export const requireAdmin: RequestHandler = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "يجب تسجيل الدخول" });
+  }
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "هذه الصفحة متاحة للمدير العام فقط" });
   }
   next();
 };
@@ -80,18 +91,35 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
   return bcrypt.compare(plain, hash);
 }
 
-export async function ensureDefaultTeacher(): Promise<void> {
-  const [existing] = await db.select().from(usersTable).where(eq(usersTable.username, "admin"));
-  if (existing) return;
+export async function ensureDefaultUsers(): Promise<void> {
+  const [adminExisting] = await db.select().from(usersTable).where(eq(usersTable.username, "admin"));
+  if (!adminExisting) {
+    const passwordHash = await hashPassword("admin123");
+    await db.insert(usersTable).values({
+      username: "admin",
+      passwordHash,
+      role: "admin",
+      fullName: "المدير العام",
+    });
+  } else if (adminExisting.role !== "admin") {
+    // Migrate previous default teacher account to admin role
+    await db.update(usersTable).set({ role: "admin", fullName: "المدير العام" }).where(eq(usersTable.id, adminExisting.id));
+  }
 
-  const passwordHash = await hashPassword("admin123");
-  await db.insert(usersTable).values({
-    username: "admin",
-    passwordHash,
-    role: "teacher",
-    fullName: "المشرف الرئيسي",
-  });
+  const [teacherExisting] = await db.select().from(usersTable).where(eq(usersTable.username, "teacher"));
+  if (!teacherExisting) {
+    const passwordHash = await hashPassword("teacher123");
+    await db.insert(usersTable).values({
+      username: "teacher",
+      passwordHash,
+      role: "teacher",
+      fullName: "أستاذ افتراضي",
+    });
+  }
 }
+
+// Backward-compat alias (older code may import this name)
+export const ensureDefaultTeacher = ensureDefaultUsers;
 
 export function publicUser(user: User) {
   return {
@@ -99,5 +127,6 @@ export function publicUser(user: User) {
     username: user.username,
     role: user.role,
     fullName: user.fullName,
+    departmentId: user.departmentId,
   };
 }

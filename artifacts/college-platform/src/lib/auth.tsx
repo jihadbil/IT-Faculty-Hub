@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 
-export type Role = "teacher" | "student";
+export type Role = "teacher" | "student" | "admin";
 
 export interface AuthUser {
   id: number;
   username: string;
   fullName: string;
   role: Role;
+  departmentId?: number | null;
 }
 
 interface AuthContextValue {
