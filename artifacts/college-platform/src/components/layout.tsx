@@ -10,9 +10,9 @@ import {
   GraduationCap,
   Home,
   Library,
-  UserCog,
-  Users,
   LogOut,
+  ShieldCheck,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -47,14 +47,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
 
   const isTeacher = user?.role === "teacher";
-  const visibleSections: { title: string; icon: React.ReactNode; items: NavItem[] }[] = [];
-  if (isTeacher) {
-    visibleSections.push({ title: "بوابة الإدارة", icon: <UserCog className="w-4 h-4" />, items: TEACHER_NAV });
-  }
-  visibleSections.push({ title: "بوابة الطالب", icon: <Users className="w-4 h-4" />, items: STUDENT_NAV });
+  const navItems = isTeacher ? TEACHER_NAV : STUDENT_NAV;
+  const allHrefs = navItems.map(i => i.href);
 
-  const allHrefs = visibleSections.flatMap(s => s.items.map(i => i.href));
-  const isStudentSection = location.startsWith("/student");
+  // Distinct theming per portal
+  const theme = isTeacher
+    ? {
+        sidebarBg: "bg-primary",
+        portalLabel: "بوابة الإدارة",
+        roleLabel: "أستاذ / مشرف",
+        roleIcon: <ShieldCheck className="w-4 h-4" />,
+        subTitle: "لوحة الإدارة",
+      }
+    : {
+        sidebarBg: "bg-emerald-700",
+        portalLabel: "بوابة الطالب",
+        roleLabel: "طالب",
+        roleIcon: <UserRound className="w-4 h-4" />,
+        subTitle: "بوابة الطالب",
+      };
 
   const handleLogout = async () => {
     try {
@@ -62,21 +73,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const renderSection = (
-    title: string,
-    icon: React.ReactNode,
-    items: NavItem[],
-    onClick?: () => void,
-  ) => (
+  const renderNav = (onClick?: () => void) => (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-        <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center text-white/90">
-          {icon}
-        </div>
-        <h3 className="text-xs font-display font-bold text-white/60 uppercase tracking-wider">{title}</h3>
-      </div>
-      {items.map(item => {
+      {navItems.map(item => {
         const isActive = isActiveLink(location, item.href, allHrefs);
+        const activeTextClass = isTeacher ? "text-primary" : "text-emerald-700";
         return (
           <Link key={item.href} href={item.href}>
             <span
@@ -84,8 +85,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group cursor-pointer",
                 isActive
-                  ? "bg-white text-primary shadow-lg shadow-black/10 scale-[1.02]"
-                  : "text-primary-foreground/80 hover:bg-white/10 hover:text-white"
+                  ? `bg-white ${activeTextClass} shadow-lg shadow-black/10 scale-[1.02]`
+                  : "text-white/80 hover:bg-white/10 hover:text-white"
               )}
             >
               <item.icon className={cn("w-5 h-5 transition-transform duration-300", isActive ? "scale-110" : "group-hover:scale-110")} />
@@ -105,7 +106,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-white truncate">{user?.fullName}</p>
-          <p className="text-xs text-white/60">{isTeacher ? "أستاذ / مشرف" : "طالب"}</p>
+          <p className="text-xs text-white/70 flex items-center gap-1">
+            {theme.roleIcon}
+            {theme.roleLabel}
+          </p>
         </div>
       </div>
       <button
@@ -121,7 +125,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex" dir="rtl">
       {/* Sidebar Desktop */}
-      <aside className="hidden md:flex w-72 flex-col fixed inset-y-0 end-0 z-40 bg-primary shadow-2xl text-primary-foreground overflow-hidden">
+      <aside className={cn("hidden md:flex w-72 flex-col fixed inset-y-0 end-0 z-40 shadow-2xl text-white overflow-hidden", theme.sidebarBg)}>
         <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
         <div className="relative p-6 flex items-center gap-3 border-b border-white/10">
           <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md shrink-0">
@@ -129,22 +133,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <h1 className="font-display font-bold text-lg leading-tight truncate">كلية تقنية المعلومات</h1>
-            <p className="text-primary-foreground/70 text-xs">المنصة التعليمية</p>
+            <p className="text-white/70 text-xs">{theme.subTitle}</p>
           </div>
         </div>
 
         <div className="relative px-6 pt-4">
-          <div className="bg-white/10 rounded-xl px-3 py-2 text-xs text-center font-bold text-white/90">
-            {isStudentSection ? "وضع الطالب" : "وضع الإدارة"}
+          <div className="bg-white/15 rounded-xl px-3 py-2 text-xs text-center font-bold text-white flex items-center justify-center gap-2">
+            {theme.roleIcon}
+            {theme.portalLabel}
           </div>
         </div>
 
-        <nav className="relative flex-1 p-4 space-y-5 overflow-y-auto">
-          {visibleSections.map(s => (
-            <React.Fragment key={s.title}>
-              {renderSection(s.title, s.icon, s.items)}
-            </React.Fragment>
-          ))}
+        <nav className="relative flex-1 p-4 overflow-y-auto">
+          {renderNav()}
         </nav>
 
         <div className="relative p-4 border-t border-white/10">
@@ -153,12 +154,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 inset-x-0 h-20 bg-primary text-white z-50 flex items-center justify-between px-6 shadow-xl">
+      <div className={cn("md:hidden fixed top-0 inset-x-0 h-20 text-white z-50 flex items-center justify-between px-6 shadow-xl", theme.sidebarBg)}>
         <div className="flex items-center gap-3">
           <GraduationCap className="w-8 h-8" />
           <div>
             <h1 className="font-display font-bold text-lg leading-tight">تقنية المعلومات</h1>
-            <p className="text-xs text-white/70">{isStudentSection ? "وضع الطالب" : "وضع الإدارة"}</p>
+            <p className="text-xs text-white/70">{theme.portalLabel}</p>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-xl bg-white/20">
@@ -168,13 +169,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-primary/95 backdrop-blur-lg pt-24 px-6 pb-6 flex flex-col overflow-y-auto">
-          <div className="space-y-6 flex-1">
-            {visibleSections.map(s => (
-              <React.Fragment key={s.title}>
-                {renderSection(s.title, s.icon, s.items, () => setIsMobileMenuOpen(false))}
-              </React.Fragment>
-            ))}
+        <div className={cn("md:hidden fixed inset-0 z-40 backdrop-blur-lg pt-24 px-6 pb-6 flex flex-col overflow-y-auto", theme.sidebarBg, "bg-opacity-95")}>
+          <div className="flex-1">
+            {renderNav(() => setIsMobileMenuOpen(false))}
           </div>
           <div className="mt-6">{userPanel}</div>
         </div>
