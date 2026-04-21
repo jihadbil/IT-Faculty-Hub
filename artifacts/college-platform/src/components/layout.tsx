@@ -12,8 +12,10 @@ import {
   Library,
   UserCog,
   Users,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -34,7 +36,6 @@ const STUDENT_NAV: NavItem[] = [
 function isActiveLink(location: string, href: string, allHrefs: string[]) {
   if (location === href) return true;
   if (href === "/" || href === "/student") return false;
-  // Make sure parent links don't match child links from another section
   const moreSpecific = allHrefs.some(h => h !== href && h.startsWith(href + "/") && location.startsWith(h));
   if (moreSpecific) return false;
   return location.startsWith(href);
@@ -43,9 +44,23 @@ function isActiveLink(location: string, href: string, allHrefs: string[]) {
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
+  const isTeacher = user?.role === "teacher";
+  const visibleSections: { title: string; icon: React.ReactNode; items: NavItem[] }[] = [];
+  if (isTeacher) {
+    visibleSections.push({ title: "بوابة الإدارة", icon: <UserCog className="w-4 h-4" />, items: TEACHER_NAV });
+  }
+  visibleSections.push({ title: "بوابة الطالب", icon: <Users className="w-4 h-4" />, items: STUDENT_NAV });
+
+  const allHrefs = visibleSections.flatMap(s => s.items.map(i => i.href));
   const isStudentSection = location.startsWith("/student");
-  const allHrefs = [...TEACHER_NAV, ...STUDENT_NAV].map(n => n.href);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {}
+  };
 
   const renderSection = (
     title: string,
@@ -82,6 +97,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
     </div>
   );
 
+  const userPanel = (
+    <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-md space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold shrink-0">
+          {user?.fullName?.[0] || "?"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-white truncate">{user?.fullName}</p>
+          <p className="text-xs text-white/60">{isTeacher ? "أستاذ / مشرف" : "طالب"}</p>
+        </div>
+      </div>
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        تسجيل الخروج
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background flex" dir="rtl">
       {/* Sidebar Desktop */}
@@ -97,7 +133,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Section badge */}
         <div className="relative px-6 pt-4">
           <div className="bg-white/10 rounded-xl px-3 py-2 text-xs text-center font-bold text-white/90">
             {isStudentSection ? "وضع الطالب" : "وضع الإدارة"}
@@ -105,14 +140,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="relative flex-1 p-4 space-y-5 overflow-y-auto">
-          {renderSection("بوابة الإدارة", <UserCog className="w-4 h-4" />, TEACHER_NAV)}
-          {renderSection("بوابة الطالب", <Users className="w-4 h-4" />, STUDENT_NAV)}
+          {visibleSections.map(s => (
+            <React.Fragment key={s.title}>
+              {renderSection(s.title, s.icon, s.items)}
+            </React.Fragment>
+          ))}
         </nav>
 
         <div className="relative p-4 border-t border-white/10">
-          <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-md">
-            <p className="text-xs text-center text-white/80 font-medium">العام الدراسي 2024-2025</p>
-          </div>
+          {userPanel}
         </div>
       </aside>
 
@@ -134,9 +170,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-40 bg-primary/95 backdrop-blur-lg pt-24 px-6 pb-6 flex flex-col overflow-y-auto">
           <div className="space-y-6 flex-1">
-            {renderSection("بوابة الإدارة", <UserCog className="w-4 h-4" />, TEACHER_NAV, () => setIsMobileMenuOpen(false))}
-            {renderSection("بوابة الطالب", <Users className="w-4 h-4" />, STUDENT_NAV, () => setIsMobileMenuOpen(false))}
+            {visibleSections.map(s => (
+              <React.Fragment key={s.title}>
+                {renderSection(s.title, s.icon, s.items, () => setIsMobileMenuOpen(false))}
+              </React.Fragment>
+            ))}
           </div>
+          <div className="mt-6">{userPanel}</div>
         </div>
       )}
 

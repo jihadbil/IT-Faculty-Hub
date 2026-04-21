@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { lecturesTable, coursesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { CreateLectureBody, GetLecturesQueryParams } from "@workspace/api-zod";
+import { requireTeacher } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -47,7 +48,7 @@ router.get("/lectures", async (req, res) => {
   }
 });
 
-router.post("/lectures", async (req, res) => {
+router.post("/lectures", requireTeacher, async (req, res) => {
   try {
     const parsed = CreateLectureBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
@@ -96,7 +97,7 @@ router.get("/lectures/:id", async (req, res) => {
   }
 });
 
-router.put("/lectures/:id", async (req, res) => {
+router.put("/lectures/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -111,7 +112,7 @@ router.put("/lectures/:id", async (req, res) => {
   }
 });
 
-router.delete("/lectures/:id", async (req, res) => {
+router.delete("/lectures/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });

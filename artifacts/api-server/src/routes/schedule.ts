@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { scheduleTable, coursesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { CreateScheduleEntryBody, GetScheduleQueryParams } from "@workspace/api-zod";
+import { requireTeacher } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -53,7 +54,7 @@ router.get("/schedule", async (req, res) => {
   }
 });
 
-router.post("/schedule", async (req, res) => {
+router.post("/schedule", requireTeacher, async (req, res) => {
   try {
     const parsed = CreateScheduleEntryBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
@@ -65,7 +66,7 @@ router.post("/schedule", async (req, res) => {
   }
 });
 
-router.put("/schedule/:id", async (req, res) => {
+router.put("/schedule/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -80,7 +81,7 @@ router.put("/schedule/:id", async (req, res) => {
   }
 });
 
-router.delete("/schedule/:id", async (req, res) => {
+router.delete("/schedule/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });

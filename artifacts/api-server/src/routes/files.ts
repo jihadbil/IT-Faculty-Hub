@@ -6,6 +6,7 @@ import { db } from "@workspace/db";
 import { filesTable, lecturesTable, coursesTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { GetFilesQueryParams } from "@workspace/api-zod";
+import { requireTeacher } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -104,7 +105,7 @@ router.get("/files", async (req, res) => {
   }
 });
 
-router.post("/files/upload", upload.single("file"), async (req, res) => {
+router.post("/files/upload", requireTeacher, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
@@ -133,7 +134,7 @@ router.post("/files/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-router.delete("/files/:id", async (req, res) => {
+router.delete("/files/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });

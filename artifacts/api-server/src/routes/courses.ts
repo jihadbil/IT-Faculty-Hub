@@ -6,6 +6,7 @@ import {
   CreateCourseBody,
   GetCoursesQueryParams,
 } from "@workspace/api-zod";
+import { requireTeacher } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -26,7 +27,7 @@ router.get("/courses", async (req, res) => {
   }
 });
 
-router.post("/courses", async (req, res) => {
+router.post("/courses", requireTeacher, async (req, res) => {
   try {
     const parsed = CreateCourseBody.safeParse(req.body);
     if (!parsed.success) {
@@ -53,7 +54,7 @@ router.get("/courses/:id", async (req, res) => {
   }
 });
 
-router.put("/courses/:id", async (req, res) => {
+router.put("/courses/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
@@ -68,7 +69,7 @@ router.put("/courses/:id", async (req, res) => {
   }
 });
 
-router.delete("/courses/:id", async (req, res) => {
+router.delete("/courses/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
