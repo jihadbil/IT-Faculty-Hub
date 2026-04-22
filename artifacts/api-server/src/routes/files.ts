@@ -6,7 +6,7 @@ import { db } from "@workspace/db";
 import { filesTable, lecturesTable, coursesTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { GetFilesQueryParams } from "@workspace/api-zod";
-import { requireTeacher } from "../lib/auth";
+import { requireTeacher, userOwnsCourse } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -114,6 +114,14 @@ router.post("/files/upload", requireTeacher, upload.single("file"), async (req, 
     if (!title || !type) {
       return res.status(400).json({ message: "Title and type are required" });
     }
+    let resolvedCourseId: number | null = courseId ? parseInt(courseId) : null;
+    if (!resolvedCourseId && lectureId) {
+      const [lec] = await db.select().from(lecturesTable).where(eq(lecturesTable.id, parseInt(lectureId)));
+      if (lec) resolvedCourseId = lec.courseId;
+    }
+    if (!resolvedCourseId || !(await userOwnsCourse(req.user!, resolvedCourseId))) {
+      return res.status(403).json({ message: "لا يمكنك الرفع إلا للمواد المسندة إليك" });
+    }
     const url = `/api/uploads/${req.file.filename}`;
     const [fileRecord] = await db
       .insert(filesTable)
@@ -139,7 +147,12 @@ router.delete("/files/:id", requireTeacher, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const [file] = await db.select().from(filesTable).where(eq(filesTable.id, id));
-    if (file) {
+    if (!file) return res.status(404).json({ message: "File not found" });
+    const ownerCourseId = file.courseId ?? (file.lectureId ? (await db.select().from(lecturesTable).where(eq(lecturesTable.id, file.lectureId)))[0]?.courseId ?? null : null);
+    if (!ownerCourseId || !(await userOwnsCourse(req.user!, ownerCourseId))) {
+      return res.status(403).json({ message: "لا يمكنك الحذف إلا من المواد المسندة إليك" });
+    }
+    {
       const storedFilename = file.url.replace("/api/uploads/", "");
       const filePath = path.join(uploadsDir, storedFilename);
       if (fs.existsSync(filePath)) {

@@ -81,6 +81,15 @@ function ProtectedLayoutRoutes() {
         <Route path="/admin/students">
           <Protected roles={["admin"]}><AdminStudents /></Protected>
         </Route>
+        <Route path="/admin/courses">
+          <Protected roles={["admin"]}><Courses /></Protected>
+        </Route>
+        <Route path="/admin/courses/:id">
+          <Protected roles={["admin"]}><CourseDetails /></Protected>
+        </Route>
+        <Route path="/admin/schedule">
+          <Protected roles={["admin"]}><Schedule /></Protected>
+        </Route>
 
         {/* Teacher */}
         <Route path="/">

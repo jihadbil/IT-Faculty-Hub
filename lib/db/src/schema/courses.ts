@@ -14,6 +14,7 @@ export const coursesTable = pgTable("courses", {
   instructor: text("instructor"),
   color: text("color").default("#3B82F6"),
   departmentId: integer("department_id").references(() => departmentsTable.id, { onDelete: "set null" }),
+  teacherId: integer("teacher_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { useGetCourses, useCreateCourse, useDeleteCourse, Course } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, BookOpen, Clock, Users, Trash2, ChevronLeft } from "lucide-react";
 import { Button, Card, Modal, Input, Select, Badge } from "@/components/ui/shared";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useAuth } from "@/lib/auth";
 
 const courseSchema = z.object({
   name: z.string().min(2, "الاسم مطلوب"),
@@ -18,6 +19,7 @@ const courseSchema = z.object({
   credits: z.coerce.number().min(1),
   instructor: z.string().optional(),
   color: z.string().optional(),
+  teacherId: z.union([z.coerce.number(), z.literal("")]).optional(),
 });
 
 type CourseFormValues = z.infer<typeof courseSchema>;
@@ -26,9 +28,21 @@ const COLORS = ["#1e40af", "#0f766e", "#b45309", "#be123c", "#6d28d9", "#4338ca"
 
 export default function Courses() {
   const queryClient = useQueryClient();
-  const { data: courses = [], isLoading } = useGetCourses();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const { data: allCourses = [], isLoading } = useGetCourses();
+  const courses = isAdmin ? allCourses : allCourses.filter(c => (c as any).teacherId === user?.id);
   const createCourse = useCreateCourse();
   const deleteCourse = useDeleteCourse();
+  const { data: teachers = [] } = useQuery<{ id: number; fullName: string }[]>({
+    queryKey: ["/api/admin/teachers"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/teachers", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isAdmin,
+  });
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [filterYear, setFilterYear] = useState<string>("all");
@@ -78,9 +92,11 @@ export default function Courses() {
             <option value="3">السنة الثالثة</option>
             <option value="4">السنة الرابعة</option>
           </Select>
-          <Button onClick={() => setIsAddModalOpen(true)} className="gap-2 shrink-0">
-            <Plus className="w-5 h-5" /> إضافة مادة
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setIsAddModalOpen(true)} className="gap-2 shrink-0">
+              <Plus className="w-5 h-5" /> إضافة مادة
+            </Button>
+          )}
         </div>
       </div>
 
@@ -99,7 +115,7 @@ export default function Courses() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
             >
-              <Link href={`/courses/${course.id}`}>
+              <Link href={`${isAdmin ? "/admin" : ""}/courses/${course.id}`}>
                 <Card className="h-full hover:shadow-xl hover:border-primary/30 transition-all duration-300 group cursor-pointer overflow-hidden flex flex-col relative">
                   <div 
                     className="h-3 w-full" 
@@ -110,12 +126,14 @@ export default function Courses() {
                       <Badge variant="outline" className="bg-muted/50 font-mono text-sm tracking-wider">
                         {course.code}
                       </Badge>
-                      <button 
-                        onClick={(e) => handleDelete(e, course.id)}
-                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      {isAdmin && (
+                        <button 
+                          onClick={(e) => handleDelete(e, course.id)}
+                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                     <h3 className="text-2xl font-display font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
                       {course.name}
@@ -202,6 +220,14 @@ export default function Courses() {
               <label className="block text-sm font-bold mb-2">أستاذ المادة</label>
               <Input {...register("instructor")} placeholder="اسم الدكتور..." />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">الأستاذ المسؤول</label>
+            <Select {...register("teacherId" as any)}>
+              <option value="">-- بدون أستاذ --</option>
+              {teachers.map(t => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+            </Select>
           </div>
 
           <div>

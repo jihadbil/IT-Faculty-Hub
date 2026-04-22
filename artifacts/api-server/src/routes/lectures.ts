@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { lecturesTable, coursesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { CreateLectureBody, GetLecturesQueryParams } from "@workspace/api-zod";
-import { requireTeacher } from "../lib/auth";
+import { requireTeacher, userOwnsCourse } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -52,6 +52,9 @@ router.post("/lectures", requireTeacher, async (req, res) => {
   try {
     const parsed = CreateLectureBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+    if (!(await userOwnsCourse(req.user!, parsed.data.courseId))) {
+      return res.status(403).json({ message: "لا يمكنك الإضافة إلا للمواد المسندة إليك" });
+    }
     const [lecture] = await db.insert(lecturesTable).values(parsed.data).returning();
     res.status(201).json(lecture);
   } catch (err) {
@@ -103,6 +106,9 @@ router.put("/lectures/:id", requireTeacher, async (req, res) => {
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const parsed = CreateLectureBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+    if (!(await userOwnsCourse(req.user!, parsed.data.courseId))) {
+      return res.status(403).json({ message: "لا يمكنك التعديل إلا على المواد المسندة إليك" });
+    }
     const [lecture] = await db.update(lecturesTable).set(parsed.data).where(eq(lecturesTable.id, id)).returning();
     if (!lecture) return res.status(404).json({ message: "Lecture not found" });
     res.json(lecture);
@@ -116,6 +122,11 @@ router.delete("/lectures/:id", requireTeacher, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    const [existing] = await db.select().from(lecturesTable).where(eq(lecturesTable.id, id));
+    if (!existing) return res.status(404).json({ message: "Lecture not found" });
+    if (!(await userOwnsCourse(req.user!, existing.courseId))) {
+      return res.status(403).json({ message: "لا يمكنك الحذف إلا من المواد المسندة إليك" });
+    }
     await db.delete(lecturesTable).where(eq(lecturesTable.id, id));
     res.json({ message: "Lecture deleted", success: true });
   } catch (err) {

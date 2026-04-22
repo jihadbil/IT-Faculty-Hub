@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ARABIC_DAYS } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 const scheduleSchema = z.object({
   courseId: z.coerce.number().min(1, "اختر المادة"),
@@ -21,6 +22,8 @@ type ScheduleFormValues = z.infer<typeof scheduleSchema>;
 
 export default function Schedule() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   
   const [year, setYear] = useState<number>(1);
   const [semester, setSemester] = useState<string>("الفصل الأول");
@@ -81,9 +84,11 @@ export default function Schedule() {
               <option value="الفصل الثاني">الفصل الثاني</option>
             </Select>
           </div>
-          <Button onClick={() => setIsAddOpen(true)} className="gap-2 w-full sm:w-auto shrink-0">
-            <Plus className="w-5 h-5" /> إضافة موعد
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setIsAddOpen(true)} className="gap-2 w-full sm:w-auto shrink-0">
+              <Plus className="w-5 h-5" /> إضافة موعد
+            </Button>
+          )}
         </div>
       </div>
 
@@ -115,16 +120,18 @@ export default function Schedule() {
                     
                     return (
                       <div key={entry.id} className={`p-4 rounded-2xl border transition-all hover:shadow-md relative group ${typeInfo.color} bg-white`}>
-                        <button 
-                          onClick={() => {
-                            if(confirm('حذف هذا الموعد؟')) deleteEntry.mutate({ id: entry.id }, {
-                              onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/schedule"] })
-                            });
-                          }}
-                          className="absolute top-2 left-2 p-1.5 text-destructive bg-destructive/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {isAdmin && (
+                          <button 
+                            onClick={() => {
+                              if(confirm('حذف هذا الموعد؟')) deleteEntry.mutate({ id: entry.id }, {
+                                onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/schedule"] })
+                              });
+                            }}
+                            className="absolute top-2 left-2 p-1.5 text-destructive bg-destructive/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                         
                         <Badge variant="outline" className={`mb-3 bg-white/50 ${typeInfo.color}`}>
                           {typeInfo.label}

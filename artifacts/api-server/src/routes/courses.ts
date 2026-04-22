@@ -6,7 +6,7 @@ import {
   CreateCourseBody,
   GetCoursesQueryParams,
 } from "@workspace/api-zod";
-import { requireTeacher } from "../lib/auth";
+import { requireAdmin } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -20,6 +20,9 @@ router.get("/courses", async (req, res) => {
     if (query.success && query.data.semester) {
       courses = courses.filter((c) => c.semester === query.data.semester);
     }
+    if (req.query.mine === "true" && req.user?.role === "teacher") {
+      courses = courses.filter((c) => c.teacherId === req.user!.id);
+    }
     res.json(courses);
   } catch (err) {
     req.log.error({ err }, "Failed to get courses");
@@ -27,22 +30,23 @@ router.get("/courses", async (req, res) => {
   }
 });
 
-function pickDepartmentId(body: unknown): number | null | undefined {
-  if (!body || typeof body !== "object") return undefined;
-  const v = (body as Record<string, unknown>).departmentId;
+function pickNumberOrNull(body: unknown, key: string): number | null {
+  if (!body || typeof body !== "object") return null;
+  const v = (body as Record<string, unknown>)[key];
   if (v === null || v === "" || v === undefined) return null;
   const n = typeof v === "number" ? v : parseInt(String(v));
   return Number.isFinite(n) ? n : null;
 }
 
-router.post("/courses", requireTeacher, async (req, res) => {
+router.post("/courses", requireAdmin, async (req, res) => {
   try {
     const parsed = CreateCourseBody.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid request body" });
     }
-    const departmentId = pickDepartmentId(req.body);
-    const [course] = await db.insert(coursesTable).values({ ...parsed.data, departmentId }).returning();
+    const departmentId = pickNumberOrNull(req.body, "departmentId");
+    const teacherId = pickNumberOrNull(req.body, "teacherId");
+    const [course] = await db.insert(coursesTable).values({ ...parsed.data, departmentId, teacherId }).returning();
     res.status(201).json(course);
   } catch (err) {
     req.log.error({ err }, "Failed to create course");
@@ -63,14 +67,15 @@ router.get("/courses/:id", async (req, res) => {
   }
 });
 
-router.put("/courses/:id", requireTeacher, async (req, res) => {
+router.put("/courses/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const parsed = CreateCourseBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
-    const departmentId = pickDepartmentId(req.body);
-    const [course] = await db.update(coursesTable).set({ ...parsed.data, departmentId }).where(eq(coursesTable.id, id)).returning();
+    const departmentId = pickNumberOrNull(req.body, "departmentId");
+    const teacherId = pickNumberOrNull(req.body, "teacherId");
+    const [course] = await db.update(coursesTable).set({ ...parsed.data, departmentId, teacherId }).where(eq(coursesTable.id, id)).returning();
     if (!course) return res.status(404).json({ message: "Course not found" });
     res.json(course);
   } catch (err) {
@@ -79,7 +84,7 @@ router.put("/courses/:id", requireTeacher, async (req, res) => {
   }
 });
 
-router.delete("/courses/:id", requireTeacher, async (req, res) => {
+router.delete("/courses/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });

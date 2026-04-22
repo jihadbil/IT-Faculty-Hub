@@ -24,7 +24,7 @@ type NavItem = { href: string; label: string; icon: React.ComponentType<{ classN
 
 const TEACHER_NAV: NavItem[] = [
   { href: "/", label: "لوحة القيادة", icon: LayoutDashboard },
-  { href: "/courses", label: "المواد الدراسية", icon: BookOpen },
+  { href: "/courses", label: "موادي", icon: BookOpen },
   { href: "/files", label: "مكتبة الملفات", icon: FileVideo },
   { href: "/schedule", label: "جدول المحاضرات", icon: CalendarDays },
 ];
@@ -41,6 +41,8 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/departments", label: "الأقسام", icon: Building2 },
   { href: "/admin/teachers", label: "الأساتذة", icon: Users },
   { href: "/admin/students", label: "الطلاب", icon: UserRound },
+  { href: "/admin/courses", label: "المواد الدراسية", icon: BookOpen },
+  { href: "/admin/schedule", label: "جدول المحاضرات", icon: CalendarDays },
 ];
 
 function isActiveLink(location: string, href: string, allHrefs: string[]) {

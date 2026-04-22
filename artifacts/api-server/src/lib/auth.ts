@@ -83,6 +83,15 @@ export const requireAdmin: RequestHandler = (req, res, next) => {
   next();
 };
 
+// Returns true if user is admin, or is the teacher assigned to this course.
+export async function userOwnsCourse(user: User, courseId: number): Promise<boolean> {
+  if (user.role === "admin") return true;
+  if (user.role !== "teacher") return false;
+  const { coursesTable } = await import("@workspace/db/schema");
+  const [course] = await db.select().from(coursesTable).where(eq(coursesTable.id, courseId));
+  return !!course && course.teacherId === user.id;
+}
+
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 10);
 }
