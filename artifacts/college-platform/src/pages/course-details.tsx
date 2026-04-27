@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, Redirect } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/lib/auth";
 import { 
   useGetCourse, 
   useGetLectures, 
@@ -28,11 +29,16 @@ const lectureSchema = z.object({
 type LectureFormValues = z.infer<typeof lectureSchema>;
 
 export default function CourseDetails() {
-  const [, params] = useRoute("/courses/:id");
-  const courseId = params?.id ? parseInt(params.id) : 0;
-  
+  const { user } = useAuth();
+  const [, paramsTeacher] = useRoute("/courses/:id");
+  const [, paramsAdmin] = useRoute("/admin/courses/:id");
+  const idStr = paramsTeacher?.id ?? paramsAdmin?.id;
+  const courseId = idStr ? parseInt(idStr) : 0;
+
   const queryClient = useQueryClient();
   const { data: course, isLoading: loadingCourse } = useGetCourse(courseId);
+  const canEdit = user?.role === "admin" || (user?.role === "teacher" && (course as any)?.teacherId === user.id);
+  const isTeacherButNotOwner = user?.role === "teacher" && course && (course as any).teacherId !== user.id;
   const { data: lectures = [], isLoading: loadingLectures } = useGetLectures({ courseId });
   const { data: files = [], isLoading: loadingFiles } = useGetFiles({ courseId });
   
@@ -87,6 +93,7 @@ export default function CourseDetails() {
 
   if (loadingCourse) return <div className="p-12 text-center text-xl animate-pulse">جاري التحميل...</div>;
   if (!course) return <div className="p-12 text-center text-xl text-destructive">لم يتم العثور على المادة</div>;
+  if (isTeacherButNotOwner) return <Redirect to="/courses" />;
 
   return (
     <div className="space-y-8">
@@ -143,11 +150,13 @@ export default function CourseDetails() {
         >
           {activeTab === 'lectures' && (
             <div className="space-y-6">
-              <div className="flex justify-end">
-                <Button onClick={() => setIsAddLectureOpen(true)} className="gap-2">
-                  <Plus className="w-5 h-5" /> إضافة محاضرة
-                </Button>
-              </div>
+              {canEdit && (
+                <div className="flex justify-end">
+                  <Button onClick={() => setIsAddLectureOpen(true)} className="gap-2">
+                    <Plus className="w-5 h-5" /> إضافة محاضرة
+                  </Button>
+                </div>
+              )}
               
               {lectures.length === 0 ? (
                 <Card className="p-16 text-center border-dashed bg-transparent">
@@ -163,16 +172,18 @@ export default function CourseDetails() {
                         <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-display font-bold text-xl">
                           {lecture.lectureNumber}
                         </div>
-                        <button 
-                          onClick={() => {
-                            if(confirm('حذف المحاضرة؟')) deleteLecture.mutate({ id: lecture.id }, {
-                              onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/lectures"] })
-                            });
-                          }}
-                          className="text-muted-foreground hover:text-destructive p-2 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        {canEdit && (
+                          <button 
+                            onClick={() => {
+                              if(confirm('حذف المحاضرة؟')) deleteLecture.mutate({ id: lecture.id }, {
+                                onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/lectures"] })
+                              });
+                            }}
+                            className="text-muted-foreground hover:text-destructive p-2 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                       <h3 className="text-xl font-bold mb-2">{lecture.title}</h3>
                       <p className="text-muted-foreground text-sm flex-1">{lecture.description || 'لا يوجد وصف'}</p>
@@ -191,11 +202,13 @@ export default function CourseDetails() {
 
           {activeTab === 'files' && (
             <div className="space-y-6">
-              <div className="flex justify-end">
-                <Button onClick={() => setIsUploadOpen(true)} className="gap-2 bg-secondary hover:bg-secondary/90 shadow-secondary/20">
-                  <UploadCloud className="w-5 h-5" /> رفع ملف
-                </Button>
-              </div>
+              {canEdit && (
+                <div className="flex justify-end">
+                  <Button onClick={() => setIsUploadOpen(true)} className="gap-2 bg-secondary hover:bg-secondary/90 shadow-secondary/20">
+                    <UploadCloud className="w-5 h-5" /> رفع ملف
+                  </Button>
+                </div>
+              )}
               
               {files.length === 0 ? (
                 <Card className="p-16 text-center border-dashed bg-transparent">

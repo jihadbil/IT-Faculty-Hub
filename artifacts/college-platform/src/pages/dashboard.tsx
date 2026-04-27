@@ -5,12 +5,19 @@ import { useGetCourses, useGetLectures, useGetFiles, useGetSchedule } from "@wor
 import { BookOpen, Video, FileText, CalendarDays, ArrowLeft, Users } from "lucide-react";
 import { Card } from "@/components/ui/shared";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { useAuth } from "@/lib/auth";
 
 export default function Dashboard() {
-  const { data: courses = [], isLoading: loadingCourses } = useGetCourses();
-  const { data: lectures = [] } = useGetLectures();
-  const { data: files = [] } = useGetFiles();
+  const { user } = useAuth();
+  const { data: allCourses = [], isLoading: loadingCourses } = useGetCourses();
+  const { data: allLectures = [] } = useGetLectures();
+  const { data: allFiles = [] } = useGetFiles();
   const { data: schedule = [] } = useGetSchedule();
+
+  const courses = allCourses.filter(c => (c as any).teacherId === user?.id);
+  const myCourseIds = new Set(courses.map(c => c.id));
+  const lectures = allLectures.filter(l => myCourseIds.has(l.courseId));
+  const files = allFiles.filter(f => f.courseId && myCourseIds.has(f.courseId));
 
   const pdfCount = files.filter(f => f.type === 'pdf').length;
   const videoCount = files.filter(f => f.type === 'video').length;
@@ -44,9 +51,9 @@ export default function Dashboard() {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-primary/40" />
         <div className="relative p-8 md:p-12 text-white">
-          <h1 className="text-3xl md:text-5xl font-display font-bold mb-4">مرحباً بك في منصة الكلية</h1>
+          <h1 className="text-3xl md:text-5xl font-display font-bold mb-4">مرحباً، {user?.fullName}</h1>
           <p className="text-lg md:text-xl text-white/80 max-w-2xl leading-relaxed">
-            نظام متكامل لإدارة المقررات الدراسية، رفع المحاضرات، وتتبع الجداول الأسبوعية لطلاب وأعضاء هيئة التدريس في كلية تقنية المعلومات.
+            هذه لوحتك الخاصة. تعرض إحصائيات المواد المسندة إليك من إدارة الكلية، مع إمكانية رفع المحاضرات والملفات لها فقط.
           </p>
         </div>
       </motion.div>

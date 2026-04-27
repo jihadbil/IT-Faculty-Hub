@@ -5,13 +5,23 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FileText, PlayCircle, ExternalLink, Trash2, Search, Filter } from "lucide-react";
 import { Input, Badge } from "@/components/ui/shared";
 import { formatBytes } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 export default function Files() {
   const queryClient = useQueryClient();
-  const { data: files = [], isLoading } = useGetFiles();
-  const { data: courses = [] } = useGetCourses();
+  const { user } = useAuth();
+  const { data: allFiles = [], isLoading } = useGetFiles();
+  const { data: allCourses = [] } = useGetCourses();
   const deleteFile = useDeleteFile();
-  
+
+  const courses = user?.role === "teacher"
+    ? allCourses.filter(c => (c as any).teacherId === user.id)
+    : allCourses;
+  const myCourseIds = new Set(courses.map(c => c.id));
+  const files = user?.role === "teacher"
+    ? allFiles.filter(f => f.courseId && myCourseIds.has(f.courseId))
+    : allFiles;
+
   const [searchTerm, setSearchTerm] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState<"all" | "pdf" | "video">("all");
 
