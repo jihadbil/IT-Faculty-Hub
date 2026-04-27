@@ -1,11 +1,14 @@
 import { useMemo } from "react";
-import { Users, Loader2, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
-import { Card, Badge } from "@/components/ui/shared";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Users, Loader2, AlertCircle, CheckCircle2, XCircle, Power, PowerOff } from "lucide-react";
+import { Card, Badge, Button } from "@/components/ui/shared";
 import { ApiNotice } from "@/components/api-notice";
 import { useUsers } from "@/lib/queries";
+import { usersApi, type Uuid } from "@/lib/external-api";
 
 export default function AdminStudents() {
   const { data: users = [], isLoading, error } = useUsers();
+  const qc = useQueryClient();
 
   const students = useMemo(
     () =>
@@ -17,6 +20,19 @@ export default function AdminStudents() {
       }),
     [users],
   );
+
+  const activate = useMutation({
+    mutationFn: (id: Uuid) => usersApi.activate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["external", "users"] }),
+  });
+  const deactivate = useMutation({
+    mutationFn: (id: Uuid) => usersApi.deactivate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["external", "users"] }),
+  });
+
+  const togglePending = (id: Uuid) =>
+    (activate.isPending && activate.variables === id) ||
+    (deactivate.isPending && deactivate.variables === id);
 
   return (
     <div className="space-y-6">
@@ -30,14 +46,16 @@ export default function AdminStudents() {
 
       <ApiNotice
         title="فلترة الطلاب وإحصائياتهم محدودة حالياً"
-        description="القائمة مأخوذة من /api/users بعد الفلترة على دور الطالب. يمكنك تفعيل/تعطيل أي مستخدم عبر النقاط الموجودة. لإحصائيات أعمق (مواد مسجّلة، نشاط، مشاهدات…) يلزم نقطة نهاية مخصّصة."
+        description="القائمة مأخوذة من /api/users بعد الفلترة على دور الطالب. يمكنك تفعيل/تعطيل أي مستخدم من هنا. لإحصائيات أعمق (مواد مسجّلة، نشاط، مشاهدات…) يلزم نقطة نهاية مخصّصة."
         endpoints={["GET /api/admin/students", "GET /api/admin/students/{id}/activity"]}
       />
 
-      {error && (
+      {(error || activate.error || deactivate.error) && (
         <Card className="p-4 border-destructive/40 bg-destructive/5 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-          <p className="text-sm text-destructive break-words">{(error as Error).message}</p>
+          <p className="text-sm text-destructive break-words">
+            {((error || activate.error || deactivate.error) as Error).message}
+          </p>
         </Card>
       )}
 
@@ -57,6 +75,7 @@ export default function AdminStudents() {
                 <th className="p-4">البريد الإلكتروني</th>
                 <th className="p-4">تاريخ التسجيل</th>
                 <th className="p-4">الحالة</th>
+                <th className="p-4">إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -76,6 +95,30 @@ export default function AdminStudents() {
                       <Badge variant="outline" className="text-muted-foreground">
                         <XCircle className="w-3 h-3 ms-1" /> معطّل
                       </Badge>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {s.isActive ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        isLoading={togglePending(s.id)}
+                        onClick={() => {
+                          if (confirm(`تعطيل حساب ${s.fullName}؟`)) deactivate.mutate(s.id);
+                        }}
+                      >
+                        <PowerOff className="w-4 h-4" /> تعطيل
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="gap-1"
+                        isLoading={togglePending(s.id)}
+                        onClick={() => activate.mutate(s.id)}
+                      >
+                        <Power className="w-4 h-4" /> تفعيل
+                      </Button>
                     )}
                   </td>
                 </tr>

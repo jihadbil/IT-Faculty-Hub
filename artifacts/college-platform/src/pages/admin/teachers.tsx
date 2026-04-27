@@ -1,16 +1,32 @@
 import { useMemo } from "react";
-import { Loader2, GraduationCap, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
-import { Card, Badge } from "@/components/ui/shared";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2, GraduationCap, AlertCircle, CheckCircle2, XCircle, Power, PowerOff } from "lucide-react";
+import { Card, Badge, Button } from "@/components/ui/shared";
 import { ApiNotice } from "@/components/api-notice";
 import { useUsers } from "@/lib/queries";
+import { usersApi, type Uuid } from "@/lib/external-api";
 
 export default function AdminTeachers() {
   const { data: users = [], isLoading, error } = useUsers();
+  const qc = useQueryClient();
 
   const teachers = useMemo(
     () => users.filter((u) => u.roles.some((r) => /teacher|instructor|professor/i.test(r))),
     [users],
   );
+
+  const activate = useMutation({
+    mutationFn: (id: Uuid) => usersApi.activate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["external", "users"] }),
+  });
+  const deactivate = useMutation({
+    mutationFn: (id: Uuid) => usersApi.deactivate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["external", "users"] }),
+  });
+
+  const togglePending = (id: Uuid) =>
+    (activate.isPending && activate.variables === id) ||
+    (deactivate.isPending && deactivate.variables === id);
 
   return (
     <div className="space-y-6">
@@ -23,8 +39,8 @@ export default function AdminTeachers() {
       </div>
 
       <ApiNotice
-        title="إدارة حسابات الأساتذة تحتاج نقاط نهاية إضافية"
-        description="يمكنك تفعيل/تعطيل المستخدمين عبر /api/users/{id}/activate و /deactivate الموجودة. أمّا إنشاء حساب جديد بدور أستاذ مباشرةً وتعيين قسم له فيلزم نقاط نهاية CRUD مخصّصة."
+        title="إنشاء حسابات الأساتذة يحتاج نقاط نهاية إضافية"
+        description="يمكنك تفعيل/تعطيل المستخدمين من هنا. أمّا إنشاء حساب جديد بدور أستاذ مباشرةً وتعيين قسم له فيلزم نقاط نهاية مخصّصة."
         endpoints={[
           "POST /api/admin/teachers",
           "PUT /api/admin/teachers/{id}",
@@ -33,10 +49,12 @@ export default function AdminTeachers() {
         ]}
       />
 
-      {error && (
+      {(error || activate.error || deactivate.error) && (
         <Card className="p-4 border-destructive/40 bg-destructive/5 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-          <p className="text-sm text-destructive break-words">{(error as Error).message}</p>
+          <p className="text-sm text-destructive break-words">
+            {((error || activate.error || deactivate.error) as Error).message}
+          </p>
         </Card>
       )}
 
@@ -56,6 +74,7 @@ export default function AdminTeachers() {
                 <th className="p-4">البريد</th>
                 <th className="p-4">الأدوار</th>
                 <th className="p-4">الحالة</th>
+                <th className="p-4">إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -77,6 +96,30 @@ export default function AdminTeachers() {
                       <span className="inline-flex items-center gap-1 text-muted-foreground text-sm">
                         <XCircle className="w-4 h-4" /> معطّل
                       </span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {t.isActive ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        isLoading={togglePending(t.id)}
+                        onClick={() => {
+                          if (confirm(`تعطيل حساب ${t.fullName}؟`)) deactivate.mutate(t.id);
+                        }}
+                      >
+                        <PowerOff className="w-4 h-4" /> تعطيل
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="gap-1"
+                        isLoading={togglePending(t.id)}
+                        onClick={() => activate.mutate(t.id)}
+                      >
+                        <Power className="w-4 h-4" /> تفعيل
+                      </Button>
                     )}
                   </td>
                 </tr>

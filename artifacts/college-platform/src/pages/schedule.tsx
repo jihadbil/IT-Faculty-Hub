@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { Plus, Trash2, MapPin, Clock, CalendarDays, AlertCircle } from "lucide-react";
+import { Plus, Trash2, MapPin, Clock, CalendarDays, AlertCircle, Pencil } from "lucide-react";
 import { Button, Card, Modal, Select, Input, Badge } from "@/components/ui/shared";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,6 +40,11 @@ interface FlatEntry extends ScheduleResponseDto {
   courseName: string;
   courseCode: string;
   courseColor: string;
+}
+
+interface EditingEntry {
+  courseId: Uuid;
+  scheduleId: number;
 }
 
 export default function Schedule() {
@@ -92,26 +97,71 @@ export default function Schedule() {
     [flat],
   );
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editing, setEditing] = useState<EditingEntry | null>(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ScheduleFormValues>({
     resolver: zodResolver(scheduleSchema),
     defaultValues: { dayOfWeek: ARABIC_DAYS[0] },
   });
 
-  const createEntry = useMutation({
-    mutationFn: (data: ScheduleFormValues) =>
-      schedulesApi.create(data.courseId, {
+  // When opening for edit, prefill form
+  useEffect(() => {
+    if (!editing) return;
+    const entry = flat.find((e) => e.courseId === editing.courseId && e.id === editing.scheduleId);
+    if (!entry) return;
+    reset({
+      courseId: entry.courseId,
+      dayOfWeek: normalizeDay(entry.dayOfWeek) || ARABIC_DAYS[0],
+      startTime: entry.startTime?.slice(0, 5) ?? "",
+      endTime: entry.endTime?.slice(0, 5) ?? "",
+      building: entry.building ?? "",
+      room: entry.room ?? "",
+    });
+  }, [editing, flat, reset]);
+
+  const openCreate = () => {
+    setEditing(null);
+    reset({
+      courseId: "",
+      dayOfWeek: ARABIC_DAYS[0],
+      startTime: "",
+      endTime: "",
+      building: "",
+      room: "",
+    });
+    setIsModalOpen(true);
+  };
+
+  const openEdit = (courseId: Uuid, scheduleId: number) => {
+    setEditing({ courseId, scheduleId });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditing(null);
+  };
+
+  const upsert = useMutation({
+    mutationFn: async (data: ScheduleFormValues) => {
+      const body = {
         dayOfWeek: data.dayOfWeek,
         startTime: data.startTime,
         endTime: data.endTime,
         building: data.building || undefined,
         room: data.room || undefined,
-      }),
+      };
+      if (editing) {
+        return schedulesApi.update(editing.courseId, editing.scheduleId, body);
+      }
+      return schedulesApi.create(data.courseId, body);
+    },
     onSuccess: (_d, vars) => {
-      queryClient.invalidateQueries({ queryKey: ["external", "course", vars.courseId] });
-      setIsAddOpen(false);
-      reset();
+      // invalidate the affected course (for both create and edit; on edit course is unchanged)
+      const id = editing?.courseId ?? vars.courseId;
+      queryClient.invalidateQueries({ queryKey: ["external", "course", id] });
+      closeModal();
     },
   });
 
@@ -132,7 +182,7 @@ export default function Schedule() {
         </div>
 
         {isAdmin && (
-          <Button onClick={() => setIsAddOpen(true)} className="gap-2 shrink-0" disabled={courses.length === 0}>
+          <Button onClick={openCreate} className="gap-2 shrink-0" disabled={courses.length === 0}>
             <Plus className="w-5 h-5" /> إضافة موعد
           </Button>
         )}
@@ -170,22 +220,31 @@ export default function Schedule() {
                 <div className="p-6 flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {dayGroup.entries.map((entry) => (
                     <div
-                      key={entry.id}
+                      key={`${entry.courseId}-${entry.id}`}
                       className="p-4 rounded-2xl border border-border bg-white hover:shadow-md transition-shadow relative group"
                       style={{ borderInlineStartColor: entry.courseColor, borderInlineStartWidth: 4 }}
                     >
                       {isAdmin && (
-                        <button
-                          onClick={() => {
-                            if (confirm("حذف هذا الموعد؟")) {
-                              deleteEntry.mutate({ courseId: entry.courseId, sid: entry.id });
-                            }
-                          }}
-                          className="absolute top-2 left-2 p-1.5 text-destructive bg-destructive/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="حذف"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEdit(entry.courseId, entry.id)}
+                            className="p-1.5 text-primary bg-primary/10 rounded-lg hover:bg-primary/20"
+                            aria-label="تعديل"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm("حذف هذا الموعد؟")) {
+                                deleteEntry.mutate({ courseId: entry.courseId, sid: entry.id });
+                              }
+                            }}
+                            className="p-1.5 text-destructive bg-destructive/10 rounded-lg hover:bg-destructive/20"
+                            aria-label="حذف"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                       <Badge variant="outline" className="mb-3 font-mono">{entry.courseCode}</Badge>
                       <h4 className="font-bold text-lg text-foreground mb-3 break-words">{entry.courseName}</h4>
@@ -216,16 +275,19 @@ export default function Schedule() {
         </div>
       )}
 
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="إضافة موعد للجدول">
-        <form onSubmit={handleSubmit((d) => createEntry.mutate(d))} className="space-y-4">
+      <Modal isOpen={isModalOpen} onClose={closeModal} title={editing ? "تعديل موعد" : "إضافة موعد للجدول"}>
+        <form onSubmit={handleSubmit((d) => upsert.mutate(d))} className="space-y-4">
           <div>
             <label className="block text-sm font-bold mb-2">المادة الدراسية</label>
-            <Select {...register("courseId")} required>
+            <Select {...register("courseId")} required disabled={!!editing}>
               <option value="">— اختر المادة —</option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>{c.courseName} ({c.courseCode})</option>
               ))}
             </Select>
+            {editing && (
+              <p className="text-xs text-muted-foreground mt-1">لا يمكن نقل الموعد إلى مادة أخرى — احذفه وأنشئ جديداً.</p>
+            )}
             {errors.courseId && <span className="text-xs text-destructive">{errors.courseId.message}</span>}
           </div>
           <div>
@@ -254,12 +316,12 @@ export default function Schedule() {
               <Input {...register("room")} placeholder="قاعة 302" />
             </div>
           </div>
-          {createEntry.isError && (
-            <p className="text-sm text-destructive break-words">{(createEntry.error as Error).message}</p>
+          {upsert.isError && (
+            <p className="text-sm text-destructive break-words">{(upsert.error as Error).message}</p>
           )}
           <div className="pt-4 flex justify-end gap-3">
-            <Button type="button" variant="ghost" onClick={() => setIsAddOpen(false)}>إلغاء</Button>
-            <Button type="submit" isLoading={createEntry.isPending}>حفظ</Button>
+            <Button type="button" variant="ghost" onClick={closeModal}>إلغاء</Button>
+            <Button type="submit" isLoading={upsert.isPending}>{editing ? "حفظ التعديلات" : "إضافة"}</Button>
           </div>
         </form>
       </Modal>
@@ -269,7 +331,6 @@ export default function Schedule() {
 
 function normalizeDay(d: string): string {
   if (!d) return "";
-  // Try direct Arabic match first
   if ((ARABIC_DAYS as readonly string[]).includes(d)) return d;
   const map: Record<string, string> = {
     sunday: "الأحد",
