@@ -1,32 +1,35 @@
 import React, { useState } from "react";
 import { Link, useRoute } from "wouter";
 import { motion } from "framer-motion";
-import { useGetCourse, useGetLectures, useGetFiles } from "@workspace/api-client-react";
-import { BookOpen, ArrowRight, Clock, Users, Video, FileText, Download, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
-import { Card, Badge } from "@/components/ui/shared";
-import { formatBytes } from "@/lib/utils";
+import { useMutation } from "@tanstack/react-query";
+import { BookOpen, ArrowRight, Clock, Users, Video, ExternalLink, AlertCircle, PlayCircle, Eye } from "lucide-react";
+import { Card, Badge, Button } from "@/components/ui/shared";
+import { useCourse, useCourseVideos, colorForCourse } from "@/lib/queries";
+import { videosApi, asNumber, type VideoLectureResponseDto } from "@/lib/external-api";
 
 export default function StudentCourse() {
   const [, params] = useRoute("/student/courses/:id");
-  const courseId = parseInt(params?.id || "0");
+  const courseId = params?.id;
+  const { data: course, isLoading, error } = useCourse(courseId);
+  const { data: videos = [] } = useCourseVideos(courseId);
 
-  const { data: course, isLoading } = useGetCourse(courseId);
-  const { data: lectures = [] } = useGetLectures({ courseId });
-  const { data: courseFiles = [] } = useGetFiles({ courseId });
+  const [activeVideo, setActiveVideo] = useState<VideoLectureResponseDto | null>(null);
 
-  const [expandedLectures, setExpandedLectures] = useState<Set<number>>(new Set());
-
-  const toggle = (id: number) => {
-    setExpandedLectures(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const recordView = useMutation({
+    mutationFn: (videoId: number) => videosApi.view(courseId!, videoId),
+  });
 
   if (isLoading) {
     return <div className="h-96 bg-white rounded-3xl border border-border animate-pulse" />;
+  }
+
+  if (error) {
+    return (
+      <Card className="p-6 border-destructive/40 bg-destructive/5 flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+        <p className="text-sm text-destructive break-words">{(error as Error).message}</p>
+      </Card>
+    );
   }
 
   if (!course) {
@@ -39,8 +42,8 @@ export default function StudentCourse() {
     );
   }
 
-  const sortedLectures = [...lectures].sort((a, b) => a.lectureNumber - b.lectureNumber);
-  const generalFiles = courseFiles.filter(f => !f.lectureId);
+  const color = colorForCourse(course.id);
+  const published = videos.filter((v) => v.isPublished);
 
   return (
     <div className="space-y-8">
@@ -51,166 +54,136 @@ export default function StudentCourse() {
         </span>
       </Link>
 
-      {/* Hero card */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl overflow-hidden shadow-xl"
-      >
-        <div className="h-3" style={{ background: course.color || "#3B82F6" }} />
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl overflow-hidden shadow-xl">
+        <div className="h-3" style={{ background: color }} />
         <div className="bg-white p-8">
           <div className="flex flex-col md:flex-row gap-6 items-start">
-            <div
-              className="w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-lg shrink-0"
-              style={{ background: course.color || "#3B82F6" }}
-            >
+            <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-lg shrink-0" style={{ background: color }}>
               <BookOpen className="w-10 h-10" />
             </div>
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <Badge variant="outline">{course.code}</Badge>
-                <Badge>السنة {course.year}</Badge>
-                <Badge variant="outline">{course.semester}</Badge>
-                <Badge variant="success">{course.credits} ساعات معتمدة</Badge>
+                <Badge variant="outline" className="font-mono">{course.courseCode}</Badge>
+                <Badge>{course.semester}</Badge>
+                <Badge variant="outline"><span dir="ltr">{course.academicYear}</span></Badge>
+                <Badge variant="success">{asNumber(course.credits)} وحدات</Badge>
               </div>
-              <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">{course.name}</h1>
-              {course.instructor && (
+              <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground break-words">{course.courseName}</h1>
+              {course.professor?.fullName && (
                 <p className="text-muted-foreground mt-2 flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  المحاضر: <span className="font-bold">{course.instructor}</span>
+                  المحاضر: <span className="font-bold">{course.professor.fullName}</span>
                 </p>
               )}
               {course.description && (
-                <p className="text-foreground/80 mt-4 leading-relaxed">{course.description}</p>
+                <p className="text-foreground/80 mt-4 leading-relaxed break-words">{course.description}</p>
               )}
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-border">
-            <div className="text-center p-3 bg-muted/30 rounded-xl">
-              <p className="text-2xl font-bold text-primary">{lectures.length}</p>
-              <p className="text-xs text-muted-foreground">محاضرة</p>
-            </div>
-            <div className="text-center p-3 bg-muted/30 rounded-xl">
-              <p className="text-2xl font-bold text-primary">{courseFiles.length}</p>
-              <p className="text-xs text-muted-foreground">ملف</p>
-            </div>
-            <div className="text-center p-3 bg-muted/30 rounded-xl">
-              <p className="text-2xl font-bold text-primary">{course.credits}</p>
-              <p className="text-xs text-muted-foreground">ساعة</p>
-            </div>
+            <Stat label="فيديو" value={published.length} />
+            <Stat label="طالب مسجّل" value={asNumber(course.enrolledStudentsCount)} />
+            <Stat label="ساعة" value={asNumber(course.credits)} />
           </div>
         </div>
       </motion.div>
 
-      {/* General files */}
-      {generalFiles.length > 0 && (
+      {course.schedules?.length > 0 && (
         <Card className="p-6">
-          <h2 className="text-xl font-display font-bold text-foreground mb-4">مصادر عامة للمادة</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {generalFiles.map(f => <FileItem key={f.id} file={f} />)}
+          <h2 className="text-xl font-display font-bold text-foreground mb-4">أوقات المحاضرات</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {course.schedules.map((s) => (
+              <div key={s.id} className="p-4 rounded-2xl bg-muted/30 border border-border">
+                <p className="font-bold text-foreground">{s.dayOfWeek}</p>
+                <p className="text-sm text-muted-foreground mt-1" dir="ltr">{s.startTime} - {s.endTime}</p>
+                <p className="text-xs text-muted-foreground mt-1">{[s.building, s.room].filter(Boolean).join(" - ") || "بدون قاعة"}</p>
+              </div>
+            ))}
           </div>
         </Card>
       )}
 
-      {/* Lectures */}
       <div>
-        <h2 className="text-2xl font-display font-bold text-foreground mb-4">المحاضرات</h2>
-        {sortedLectures.length === 0 ? (
+        <h2 className="text-2xl font-display font-bold text-foreground mb-4">المحاضرات المرئية</h2>
+        {published.length === 0 ? (
           <div className="py-16 text-center bg-white rounded-3xl border border-dashed border-border">
             <Video className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">لم تتم إضافة أي محاضرة لهذه المادة بعد.</p>
+            <p className="text-muted-foreground">لم تتم إضافة أي محاضرة فيديو بعد.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {sortedLectures.map((lec, i) => {
-              const lecFiles = courseFiles.filter(f => f.lectureId === lec.id);
-              const isOpen = expandedLectures.has(lec.id);
-
-              return (
-                <motion.div
-                  key={lec.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                >
-                  <Card>
-                    <button
-                      onClick={() => toggle(lec.id)}
-                      className="w-full p-5 flex items-center gap-4 text-right hover:bg-muted/20 transition-colors"
-                    >
-                      <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold shrink-0"
-                        style={{ background: course.color || "#3B82F6" }}
-                      >
-                        {lec.lectureNumber}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-lg text-foreground truncate">{lec.title}</h3>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          {lec.duration && (
-                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {lec.duration} د</span>
-                          )}
-                          <span className="flex items-center gap-1"><FileText className="w-3 h-3" /> {lecFiles.length} ملف</span>
-                        </div>
-                      </div>
-                      {isOpen ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
-                    </button>
-
-                    {isOpen && (
-                      <div className="border-t border-border p-5 bg-muted/10 space-y-4">
-                        {lec.description && (
-                          <p className="text-foreground/80 leading-relaxed">{lec.description}</p>
-                        )}
-                        {lecFiles.length === 0 ? (
-                          <p className="text-sm text-muted-foreground italic">لا توجد ملفات مرفقة لهذه المحاضرة.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {lecFiles.map(f => <FileItem key={f.id} file={f} />)}
-                          </div>
-                        )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[...published]
+              .sort((a, b) => asNumber(a.videoOrder) - asNumber(b.videoOrder))
+              .map((v) => (
+                <Card key={v.id} className="overflow-hidden hover:shadow-xl transition-shadow">
+                  <div className="relative aspect-video bg-muted flex items-center justify-center group cursor-pointer" onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}>
+                    {v.thumbnailUrl ? (
+                      <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center" style={{ background: color }}>
+                        <PlayCircle className="w-16 h-16 text-white/80" />
                       </div>
                     )}
-                  </Card>
-                </motion.div>
-              );
-            })}
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <PlayCircle className="w-16 h-16 text-white" />
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <h3 className="font-bold text-lg text-foreground break-words">{v.title}</h3>
+                      <Badge variant="outline" className="shrink-0">#{asNumber(v.videoOrder)}</Badge>
+                    </div>
+                    {v.description && <p className="text-sm text-muted-foreground line-clamp-2 break-words">{v.description}</p>}
+                    <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {asNumber(v.viewCount)} مشاهدة</span>
+                      {v.durationSeconds && (
+                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {Math.round(asNumber(v.durationSeconds) / 60)} د</span>
+                      )}
+                    </div>
+                    {v.videoUrl && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="mt-3 gap-1 w-full"
+                        onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}
+                      >
+                        <PlayCircle className="w-4 h-4" /> مشاهدة
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              ))}
           </div>
         )}
       </div>
+
+      {activeVideo && activeVideo.videoUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setActiveVideo(null)}
+        >
+          <div className="w-full max-w-4xl bg-black rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 bg-zinc-900 text-white">
+              <h3 className="font-bold truncate">{activeVideo.title}</h3>
+              <a href={activeVideo.videoUrl} target="_blank" rel="noreferrer" className="text-white/70 hover:text-white text-sm flex items-center gap-1">
+                <ExternalLink className="w-4 h-4" /> فتح
+              </a>
+            </div>
+            <video src={activeVideo.videoUrl} controls autoPlay className="w-full aspect-video bg-black" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function FileItem({ file }: { file: any }) {
-  const isVideo = file.type === "video";
-  const Icon = isVideo ? Video : FileText;
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-border hover:border-primary/40 hover:shadow-md transition-all">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 ${isVideo ? "bg-rose-500" : "bg-blue-500"}`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h4 className="font-bold text-sm text-foreground truncate">{file.title}</h4>
-        <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
-      </div>
-      <a
-        href={file.url}
-        target="_blank"
-        rel="noreferrer"
-        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-        title="فتح"
-      >
-        <ExternalLink className="w-4 h-4" />
-      </a>
-      <a
-        href={file.url}
-        download={file.filename}
-        className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"
-        title="تحميل"
-      >
-        <Download className="w-4 h-4" />
-      </a>
+    <div className="text-center p-3 bg-muted/30 rounded-xl">
+      <p className="text-2xl font-bold text-primary">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }

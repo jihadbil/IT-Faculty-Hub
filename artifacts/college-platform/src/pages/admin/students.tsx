@@ -1,20 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
-import { Users, Loader2 } from "lucide-react";
-import { Card } from "@/components/ui/shared";
-import { api } from "@/lib/api";
-
-interface Student {
-  id: number;
-  username: string;
-  fullName: string;
-  createdAt: string | null;
-}
+import { useMemo } from "react";
+import { Users, Loader2, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Card, Badge } from "@/components/ui/shared";
+import { ApiNotice } from "@/components/api-notice";
+import { useUsers } from "@/lib/queries";
 
 export default function AdminStudents() {
-  const { data: students = [], isLoading } = useQuery<Student[]>({
-    queryKey: ["/api/admin/students"],
-    queryFn: () => api("/api/admin/students"),
-  });
+  const { data: users = [], isLoading, error } = useUsers();
+
+  const students = useMemo(
+    () =>
+      users.filter((u) => {
+        const isStudent = u.roles.some((r) => /student/i.test(r));
+        const isOnlyStudentOrNoRole = u.roles.length === 0 || isStudent;
+        const isStaff = u.roles.some((r) => /teacher|instructor|professor|admin|manager/i.test(r));
+        return isOnlyStudentOrNoRole && !isStaff;
+      }),
+    [users],
+  );
 
   return (
     <div className="space-y-6">
@@ -23,15 +25,28 @@ export default function AdminStudents() {
           <Users className="w-8 h-8 text-purple-700" />
           الطلاب
         </h1>
-        <p className="text-muted-foreground mt-1">قائمة الطلاب المسجلين في المنصة</p>
+        <p className="text-muted-foreground mt-1">المستخدمون المسجّلون كطلاب في الـ API</p>
       </div>
+
+      <ApiNotice
+        title="فلترة الطلاب وإحصائياتهم محدودة حالياً"
+        description="القائمة مأخوذة من /api/users بعد الفلترة على دور الطالب. يمكنك تفعيل/تعطيل أي مستخدم عبر النقاط الموجودة. لإحصائيات أعمق (مواد مسجّلة، نشاط، مشاهدات…) يلزم نقطة نهاية مخصّصة."
+        endpoints={["GET /api/admin/students", "GET /api/admin/students/{id}/activity"]}
+      />
+
+      {error && (
+        <Card className="p-4 border-destructive/40 bg-destructive/5 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive break-words">{(error as Error).message}</p>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-purple-700" /></div>
       ) : students.length === 0 ? (
         <Card className="p-12 text-center">
           <Users className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">لا يوجد طلاب مسجلون بعد.</p>
+          <p className="text-muted-foreground">لا يوجد طلاب مسجّلون بعد.</p>
         </Card>
       ) : (
         <Card className="overflow-x-auto">
@@ -39,17 +54,29 @@ export default function AdminStudents() {
             <thead className="bg-muted/50">
               <tr className="text-sm font-bold text-foreground">
                 <th className="p-4">الاسم الكامل</th>
-                <th className="p-4">اسم المستخدم</th>
+                <th className="p-4">البريد الإلكتروني</th>
                 <th className="p-4">تاريخ التسجيل</th>
+                <th className="p-4">الحالة</th>
               </tr>
             </thead>
             <tbody>
-              {students.map(s => (
+              {students.map((s) => (
                 <tr key={s.id} className="border-t border-border/50 hover:bg-muted/30">
                   <td className="p-4 font-bold">{s.fullName}</td>
-                  <td className="p-4 font-mono text-sm" dir="ltr">{s.username}</td>
+                  <td className="p-4 font-mono text-sm" dir="ltr">{s.email}</td>
                   <td className="p-4 text-sm text-muted-foreground">
-                    {s.createdAt ? new Date(s.createdAt).toLocaleDateString("ar") : "—"}
+                    {s.createdAtUtc ? new Date(s.createdAtUtc).toLocaleDateString("ar") : "—"}
+                  </td>
+                  <td className="p-4">
+                    {s.isActive ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-600 text-sm font-bold">
+                        <CheckCircle2 className="w-4 h-4" /> نشط
+                      </span>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        <XCircle className="w-3 h-3 ms-1" /> معطّل
+                      </Badge>
+                    )}
                   </td>
                 </tr>
               ))}

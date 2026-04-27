@@ -1,221 +1,292 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useGetSchedule, useGetCourses, useCreateScheduleEntry, useDeleteScheduleEntry } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, MapPin, Clock, CalendarDays } from "lucide-react";
+import { useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
+import { Plus, Trash2, MapPin, Clock, CalendarDays, AlertCircle } from "lucide-react";
 import { Button, Card, Modal, Select, Input, Badge } from "@/components/ui/shared";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { ARABIC_DAYS } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { useCoursesForRole, colorForCourse } from "@/lib/queries";
+import {
+  coursesApi,
+  schedulesApi,
+  type CourseResponseDto,
+  type ScheduleResponseDto,
+  type Uuid,
+} from "@/lib/external-api";
+
+const ARABIC_DAYS = [
+  "الأحد",
+  "الاثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+  "السبت",
+] as const;
 
 const scheduleSchema = z.object({
-  courseId: z.coerce.number().min(1, "اختر المادة"),
-  dayOfWeek: z.coerce.number().min(0).max(6),
-  startTime: z.string().min(1, "مطلوب"),
-  endTime: z.string().min(1, "مطلوب"),
-  location: z.string().optional(),
-  type: z.enum(["lecture", "lab", "tutorial"])
+  courseId: z.string().min(1, "اختر المادة"),
+  dayOfWeek: z.string().min(1, "اختر اليوم"),
+  startTime: z.string().min(1),
+  endTime: z.string().min(1),
+  building: z.string().optional(),
+  room: z.string().optional(),
 });
 type ScheduleFormValues = z.infer<typeof scheduleSchema>;
+
+interface FlatEntry extends ScheduleResponseDto {
+  courseName: string;
+  courseCode: string;
+  courseColor: string;
+}
 
 export default function Schedule() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  
-  const [year, setYear] = useState<number>(1);
-  const [semester, setSemester] = useState<string>("الفصل الأول");
-  const [isAddOpen, setIsAddOpen] = useState(false);
 
-  const { data: schedule = [], isLoading } = useGetSchedule({ year, semester });
-  const { data: courses = [] } = useGetCourses({ year, semester });
-  
-  const createEntry = useCreateScheduleEntry();
-  const deleteEntry = useDeleteScheduleEntry();
+  const { data: courses = [], isLoading: loadingCourses } = useCoursesForRole();
 
-  const { register, handleSubmit, reset } = useForm<ScheduleFormValues>({
-    resolver: zodResolver(scheduleSchema),
-    defaultValues: { type: "lecture", dayOfWeek: 0 }
+  const courseIds = useMemo(() => courses.map((c) => c.id), [courses]);
+
+  const detailQueries = useQueries({
+    queries: courseIds.map((id) => ({
+      queryKey: ["external", "course", id],
+      queryFn: () => coursesApi.get(id),
+      staleTime: 60_000,
+    })),
   });
 
-  const onSubmit = (data: ScheduleFormValues) => {
-    createEntry.mutate({ data: { ...data, year, semester } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/schedule"] });
-        setIsAddOpen(false);
-        reset();
+  const isLoading = loadingCourses || detailQueries.some((q) => q.isLoading);
+  const errorEntry = detailQueries.find((q) => q.error);
+  const fullCourses: CourseResponseDto[] = detailQueries
+    .map((q) => q.data)
+    .filter((c): c is CourseResponseDto => !!c);
+
+  const flat: FlatEntry[] = useMemo(() => {
+    const out: FlatEntry[] = [];
+    for (const c of fullCourses) {
+      const color = colorForCourse(c.id);
+      for (const s of c.schedules ?? []) {
+        out.push({
+          ...s,
+          courseName: c.courseName,
+          courseCode: c.courseCode,
+          courseColor: color,
+        });
       }
-    });
-  };
+    }
+    return out;
+  }, [fullCourses]);
 
-  // Group schedule by day
-  const groupedSchedule = ARABIC_DAYS.map((dayName, dayIndex) => ({
-    dayName,
-    entries: schedule.filter(s => s.dayOfWeek === dayIndex).sort((a, b) => a.startTime.localeCompare(b.startTime))
-  }));
+  const grouped = useMemo(
+    () =>
+      ARABIC_DAYS.map((dayName) => ({
+        dayName,
+        entries: flat
+          .filter((e) => normalizeDay(e.dayOfWeek) === dayName)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+      })),
+    [flat],
+  );
 
-  const getTypeLabel = (type: string) => {
-    if(type === 'lab') return { label: 'مختبر', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200' };
-    if(type === 'tutorial') return { label: 'تمارين', color: 'bg-amber-500/10 text-amber-600 border-amber-200' };
-    return { label: 'محاضرة', color: 'bg-blue-500/10 text-blue-600 border-blue-200' };
-  };
+  const [isAddOpen, setIsAddOpen] = useState(false);
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ScheduleFormValues>({
+    resolver: zodResolver(scheduleSchema),
+    defaultValues: { dayOfWeek: ARABIC_DAYS[0] },
+  });
+
+  const createEntry = useMutation({
+    mutationFn: (data: ScheduleFormValues) =>
+      schedulesApi.create(data.courseId, {
+        dayOfWeek: data.dayOfWeek,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        building: data.building || undefined,
+        room: data.room || undefined,
+      }),
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["external", "course", vars.courseId] });
+      setIsAddOpen(false);
+      reset();
+    },
+  });
+
+  const deleteEntry = useMutation({
+    mutationFn: ({ courseId, sid }: { courseId: Uuid; sid: number }) =>
+      schedulesApi.remove(courseId, sid),
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["external", "course", vars.courseId] });
+    },
+  });
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-white p-6 rounded-3xl shadow-sm border border-border">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">جدول المحاضرات</h1>
-          <p className="text-muted-foreground mt-1">تنظيم ومتابعة المحاضرات الأسبوعية</p>
+          <p className="text-muted-foreground mt-1">المواعيد المضمّنة في الـ API لكل مادة من موادك</p>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
-          <div className="flex items-center gap-2 flex-1 lg:flex-none bg-muted/30 p-2 rounded-xl border border-border">
-            <Select value={year} onChange={e => setYear(parseInt(e.target.value))} className="bg-transparent border-none shadow-none focus-visible:ring-0">
-              <option value={1}>السنة الأولى</option>
-              <option value={2}>السنة الثانية</option>
-              <option value={3}>السنة الثالثة</option>
-              <option value={4}>السنة الرابعة</option>
-            </Select>
-            <div className="w-px h-6 bg-border" />
-            <Select value={semester} onChange={e => setSemester(e.target.value)} className="bg-transparent border-none shadow-none focus-visible:ring-0">
-              <option value="الفصل الأول">الفصل الأول</option>
-              <option value="الفصل الثاني">الفصل الثاني</option>
-            </Select>
-          </div>
-          {isAdmin && (
-            <Button onClick={() => setIsAddOpen(true)} className="gap-2 w-full sm:w-auto shrink-0">
-              <Plus className="w-5 h-5" /> إضافة موعد
-            </Button>
-          )}
-        </div>
+
+        {isAdmin && (
+          <Button onClick={() => setIsAddOpen(true)} className="gap-2 shrink-0" disabled={courses.length === 0}>
+            <Plus className="w-5 h-5" /> إضافة موعد
+          </Button>
+        )}
       </div>
+
+      {errorEntry?.error && (
+        <Card className="p-4 border-destructive/40 bg-destructive/5 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+          <div className="text-sm text-destructive">
+            <p className="font-bold">تعذّر تحميل بعض المواد</p>
+            <p className="break-words mt-1">{(errorEntry.error as Error).message}</p>
+          </div>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="space-y-4 animate-pulse">
-          {[1,2,3].map(i => <div key={i} className="h-32 bg-white rounded-2xl border border-border" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-32 bg-white rounded-2xl border border-border" />)}
         </div>
       ) : (
         <div className="space-y-6">
-          {groupedSchedule.map((dayGroup, idx) => {
+          {grouped.map((dayGroup, idx) => {
             if (dayGroup.entries.length === 0) return null;
-            
             return (
               <motion.div
                 key={dayGroup.dayName}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
+                transition={{ delay: idx * 0.05 }}
                 className="bg-white rounded-3xl border border-border overflow-hidden shadow-sm flex flex-col md:flex-row"
               >
                 <div className="bg-primary/5 p-6 md:w-48 flex items-center justify-center md:border-l border-b md:border-b-0 border-border">
                   <h3 className="text-2xl font-display font-bold text-primary">{dayGroup.dayName}</h3>
                 </div>
-                
                 <div className="p-6 flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dayGroup.entries.map(entry => {
-                    const course = courses.find(c => c.id === entry.courseId);
-                    const typeInfo = getTypeLabel(entry.type);
-                    
-                    return (
-                      <div key={entry.id} className={`p-4 rounded-2xl border transition-all hover:shadow-md relative group ${typeInfo.color} bg-white`}>
-                        {isAdmin && (
-                          <button 
-                            onClick={() => {
-                              if(confirm('حذف هذا الموعد؟')) deleteEntry.mutate({ id: entry.id }, {
-                                onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/schedule"] })
-                              });
-                            }}
-                            className="absolute top-2 left-2 p-1.5 text-destructive bg-destructive/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        <Badge variant="outline" className={`mb-3 bg-white/50 ${typeInfo.color}`}>
-                          {typeInfo.label}
-                        </Badge>
-                        <h4 className="font-bold text-lg text-foreground mb-3">{course?.name || 'مادة محذوفة'}</h4>
-                        
-                        <div className="space-y-2 text-sm text-foreground/80 font-medium">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 opacity-70" />
-                            <span dir="ltr">{entry.startTime} - {entry.endTime}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 opacity-70" />
-                            <span>{entry.location || 'غير محدد'}</span>
-                          </div>
+                  {dayGroup.entries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="p-4 rounded-2xl border border-border bg-white hover:shadow-md transition-shadow relative group"
+                      style={{ borderInlineStartColor: entry.courseColor, borderInlineStartWidth: 4 }}
+                    >
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            if (confirm("حذف هذا الموعد؟")) {
+                              deleteEntry.mutate({ courseId: entry.courseId, sid: entry.id });
+                            }
+                          }}
+                          className="absolute top-2 left-2 p-1.5 text-destructive bg-destructive/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="حذف"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      <Badge variant="outline" className="mb-3 font-mono">{entry.courseCode}</Badge>
+                      <h4 className="font-bold text-lg text-foreground mb-3 break-words">{entry.courseName}</h4>
+                      <div className="space-y-2 text-sm text-foreground/80 font-medium">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 opacity-70" />
+                          <span dir="ltr">{entry.startTime} - {entry.endTime}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 opacity-70" />
+                          <span>{[entry.building, entry.room].filter(Boolean).join(" - ") || "غير محدد"}</span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </motion.div>
             );
           })}
-          
-          {schedule.length === 0 && (
-             <div className="py-24 text-center bg-white rounded-3xl border border-dashed border-border">
-               <CalendarDays className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-               <h3 className="text-xl font-bold text-foreground mb-2">الجدول فارغ</h3>
-               <p className="text-muted-foreground">قم بإضافة مواعيد محاضرات للجدول لتظهر هنا.</p>
-             </div>
+
+          {flat.length === 0 && !errorEntry && (
+            <div className="py-24 text-center bg-white rounded-3xl border border-dashed border-border">
+              <CalendarDays className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+              <h3 className="text-xl font-bold text-foreground mb-2">الجدول فارغ</h3>
+              <p className="text-muted-foreground">لا توجد مواعيد محاضرات مضافة لأي مادة بعد.</p>
+            </div>
           )}
         </div>
       )}
 
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="إضافة موعد جديد للجدول">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="إضافة موعد للجدول">
+        <form onSubmit={handleSubmit((d) => createEntry.mutate(d))} className="space-y-4">
           <div>
             <label className="block text-sm font-bold mb-2">المادة الدراسية</label>
             <Select {...register("courseId")} required>
-              <option value="">-- اختر المادة --</option>
-              {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="">— اختر المادة —</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.courseName} ({c.courseCode})</option>
+              ))}
             </Select>
-            {courses.length === 0 && <p className="text-xs text-amber-600 mt-1">يجب إضافة مواد لهذا الفصل أولاً.</p>}
+            {errors.courseId && <span className="text-xs text-destructive">{errors.courseId.message}</span>}
           </div>
-          
+          <div>
+            <label className="block text-sm font-bold mb-2">اليوم</label>
+            <Select {...register("dayOfWeek")}>
+              {ARABIC_DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-2">اليوم</label>
-              <Select {...register("dayOfWeek")}>
-                {ARABIC_DAYS.map((day, idx) => <option key={idx} value={idx}>{day}</option>)}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">النوع</label>
-              <Select {...register("type")}>
-                <option value="lecture">محاضرة</option>
-                <option value="lab">مختبر</option>
-                <option value="tutorial">تمارين</option>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2" dir="ltr">من الساعة (e.g. 08:00)</label>
+              <label className="block text-sm font-bold mb-2" dir="ltr">من</label>
               <Input type="time" {...register("startTime")} required dir="ltr" />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-2" dir="ltr">إلى الساعة (e.g. 10:00)</label>
+              <label className="block text-sm font-bold mb-2" dir="ltr">إلى</label>
               <Input type="time" {...register("endTime")} required dir="ltr" />
             </div>
           </div>
-
-          <div>
-            <label className="block text-sm font-bold mb-2">القاعة / المعمل</label>
-            <Input {...register("location")} placeholder="مثال: قاعة 302" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">المبنى</label>
+              <Input {...register("building")} placeholder="مبنى الحاسوب" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">القاعة</label>
+              <Input {...register("room")} placeholder="قاعة 302" />
+            </div>
           </div>
-
+          {createEntry.isError && (
+            <p className="text-sm text-destructive break-words">{(createEntry.error as Error).message}</p>
+          )}
           <div className="pt-4 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setIsAddOpen(false)}>إلغاء</Button>
-            <Button type="submit" isLoading={createEntry.isPending} disabled={courses.length === 0}>حفظ الموعد</Button>
+            <Button type="submit" isLoading={createEntry.isPending}>حفظ</Button>
           </div>
         </form>
       </Modal>
     </div>
   );
+}
+
+function normalizeDay(d: string): string {
+  if (!d) return "";
+  // Try direct Arabic match first
+  if ((ARABIC_DAYS as readonly string[]).includes(d)) return d;
+  const map: Record<string, string> = {
+    sunday: "الأحد",
+    monday: "الاثنين",
+    tuesday: "الثلاثاء",
+    wednesday: "الأربعاء",
+    thursday: "الخميس",
+    friday: "الجمعة",
+    saturday: "السبت",
+    "0": "الأحد",
+    "1": "الاثنين",
+    "2": "الثلاثاء",
+    "3": "الأربعاء",
+    "4": "الخميس",
+    "5": "الجمعة",
+    "6": "السبت",
+  };
+  const k = d.toLowerCase().trim();
+  return map[k] ?? d;
 }

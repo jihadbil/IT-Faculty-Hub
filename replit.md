@@ -94,3 +94,44 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+### `artifacts/college-platform` (`@workspace/college-platform`)
+
+Arabic RTL React + Vite frontend for an educational platform (students, teachers, admin portals). Wired to an external **EducationalPlatformAPI** (.NET, OpenAPI 3.1.1) via a hand-written typed fetch client at `src/lib/external-api/`.
+
+- **Base URL**: configurable via `VITE_API_BASE_URL`, defaults to `https://localhost:7079` (the spec's local dev URL).
+- **Auth**: JWT bearer + refresh token persisted in `localStorage`; client auto-refreshes on `401` once via `/api/auth/refresh`.
+- **Identity model**: user IDs are **UUID strings** (not numeric); roles array from server is mapped to the local `admin | teacher | student` enum (case-insensitive match against common role names).
+- **Routing**: wouter under the artifact's BASE_URL prefix. Three role-themed portals share `Layout`.
+
+#### Wired pages (Phase 1)
+- Auth: `login.tsx`, `register.tsx` — hit `/api/auth/login` and `/api/auth/register`.
+- Courses (admin/teacher): `pages/courses.tsx` + `pages/course-details.tsx` — `/api/courses`, `/api/courses/my`, `/api/courses/{id}`.
+- Courses (student): `pages/student/courses.tsx` + `pages/student/course.tsx` — `/api/courses/enrolled`, `/api/courses/{id}`.
+- Schedule: `pages/schedule.tsx` (admin CRUD) + `pages/student/schedule.tsx` — schedules are **embedded inside `CourseResponseDto.schedules`**, so we fetch all role-visible courses then aggregate via `useQueries`. CRUD via `/api/courses/{id}/schedules` and `/{sid}`.
+- Video lectures: under `pages/course-details.tsx` and `pages/student/course.tsx` — `/api/courses/{id}/videos` (multipart upload), `…/publish`, `…/view`.
+- Dashboards: `pages/dashboard.tsx` (teacher) and `pages/admin/dashboard.tsx` — derive stats from courses + `/api/users`.
+- Admin lists: `pages/admin/teachers.tsx`, `pages/admin/students.tsx` — read-only filtered views over `/api/users`. `pages/admin/departments.tsx` derives departments from the `department` text field on courses.
+
+#### Pages kept visible but feature-gated
+These pages render an `ApiNotice` component listing the missing endpoints they would need from the external API:
+- `pages/files.tsx` and `pages/student/files.tsx` — generic file library (only video lectures exist in the API).
+- `pages/admin/departments.tsx` — read-only list, no CRUD.
+- `pages/admin/teachers.tsx`, `pages/admin/students.tsx` — read-only with activate/deactivate via existing user endpoints.
+- `pages/admin/dashboard.tsx` — points out richer stats need a dedicated endpoint.
+
+#### Endpoints the external API does NOT yet provide (needed for full UX)
+The following would unblock currently-stubbed pages. None of these were assumed; they are explicitly missing from the spec.
+
+- **Files / library**: `GET /api/files`, `GET /api/courses/{courseId}/files`, `POST /api/courses/{courseId}/files`, `DELETE /api/courses/{courseId}/files/{fileId}`, `GET /api/files/{id}/download`.
+- **Departments**: `GET /api/departments`, `POST /api/departments`, `PUT /api/departments/{id}`, `DELETE /api/departments/{id}` (currently `department` is a free-text field on each course).
+- **Admin user management beyond activate/deactivate**: `POST /api/admin/teachers`, `PUT /api/admin/teachers/{id}`, `DELETE /api/admin/teachers/{id}`, `POST /api/users/{id}/roles`, `GET /api/admin/students`, `GET /api/admin/students/{id}/activity`.
+- **Aggregate stats**: `GET /api/admin/stats` (totals across courses, videos, views, etc.) — currently computed client-side.
+- **Schedule type/category** (lecture/lab/tutorial) — `ScheduleResponseDto` has no `type` field; UI omits it.
+- **Course color/banner** — generated deterministically client-side via a hash of the course UUID (`colorForCourse` in `src/lib/queries.ts`); the API returns no styling metadata.
+
+#### Notes on the API shape (gotchas)
+- Numeric fields in DTOs (`credits`, `enrolledStudentsCount`, `videoLecturesCount`, `videoOrder`, `viewCount`, `durationSeconds`, paged-result counts) may be returned as **string or number** by the .NET serializer. Always coerce via the `asNumber()` helper from `@/lib/external-api`.
+- `ScheduleResponseDto.dayOfWeek` is a string. The UI normalizes via a small Arabic/English/index map in `schedule.tsx` and `student/schedule.tsx`.
+- `/api/courses` returns a `PagedResult<CourseSummaryDto>` (admins); `/my` and `/enrolled` return plain arrays.
+- Refresh-token endpoint accepts the raw token as a JSON-encoded string body — handled via `rawJsonBody` in the fetch client.

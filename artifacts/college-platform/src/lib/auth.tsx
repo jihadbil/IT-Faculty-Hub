@@ -1,37 +1,74 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import {
+  authApi,
+  clearStoredTokens,
+  getStoredTokens,
+  setOnUnauthorized,
+  setStoredTokens,
+  usersApi,
+  type AuthResponseDto,
+  type UserResponseDto,
+  type Uuid,
+} from "@/lib/external-api";
 
 export type Role = "teacher" | "student" | "admin";
 
 export interface AuthUser {
-  id: number;
-  username: string;
+  id: Uuid;
+  email: string;
   fullName: string;
+  firstName: string;
+  lastName: string;
   role: Role;
-  departmentId?: number | null;
+  roles: string[];
+  profileImageUrl?: string | null;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<AuthUser>;
-  register: (username: string, password: string, fullName: string) => Promise<AuthUser>;
+  login: (email: string, password: string) => Promise<AuthUser>;
+  register: (input: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+  }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-    ...init,
+function deriveRole(roles: string[]): Role {
+  const lower = roles.map((r) => r.toLowerCase());
+  const has = (...needles: string[]) => lower.some((r) => needles.some((n) => r.includes(n)));
+  if (has("admin", "manager")) return "admin";
+  if (has("teacher", "instructor", "professor")) return "teacher";
+  return "student";
+}
+
+function toAuthUser(u: UserResponseDto, fallbackRoles?: string[]): AuthUser {
+  const roles = u.roles?.length ? u.roles : fallbackRoles || [];
+  return {
+    id: u.id,
+    email: u.email,
+    fullName: u.fullName || `${u.firstName} ${u.lastName}`.trim(),
+    firstName: u.firstName,
+    lastName: u.lastName,
+    role: deriveRole(roles),
+    roles,
+    profileImageUrl: u.profileImageUrl ?? null,
+  };
+}
+
+function persistTokens(res: AuthResponseDto) {
+  setStoredTokens({
+    token: res.token,
+    refreshToken: res.refreshToken,
+    expiresAt: res.expiresAt,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error((data as any)?.message || `HTTP ${res.status}`);
-  }
-  return data as T;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -39,38 +76,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    if (!getStoredTokens()) {
+      setUser(null);
+      return;
+    }
     try {
-      const data = await api<{ user: AuthUser }>("/api/auth/me");
-      setUser(data.user);
+      const me = await usersApi.me();
+      setUser(toAuthUser(me));
     } catch {
+      clearStoredTokens();
       setUser(null);
     }
   }, []);
 
   useEffect(() => {
+    setOnUnauthorized(() => {
+      clearStoredTokens();
+      setUser(null);
+    });
     refresh().finally(() => setLoading(false));
+    return () => setOnUnauthorized(null);
   }, [refresh]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const data = await api<{ user: AuthUser }>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-    setUser(data.user);
-    return data.user;
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await authApi.login({ email, password });
+    persistTokens(res);
+    let me: UserResponseDto;
+    try {
+      me = await usersApi.me();
+    } catch {
+      const u = res.user;
+      const [first, ...rest] = (u.fullName || "").split(" ");
+      me = {
+        id: u.id,
+        firstName: first || u.fullName,
+        lastName: rest.join(" "),
+        fullName: u.fullName,
+        email: u.email,
+        phoneNumber: null,
+        profileImageUrl: u.profileImageUrl ?? null,
+        preferredLanguage: "ar",
+        isActive: true,
+        createdAtUtc: new Date().toISOString(),
+        roles: res.roles || [],
+      };
+    }
+    const next = toAuthUser(me, res.roles);
+    setUser(next);
+    return next;
   }, []);
 
-  const register = useCallback(async (username: string, password: string, fullName: string) => {
-    const data = await api<{ user: AuthUser }>("/api/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ username, password, fullName }),
-    });
-    setUser(data.user);
-    return data.user;
-  }, []);
+  const register = useCallback(
+    async (input: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      password: string;
+      confirmPassword: string;
+    }) => {
+      const res = await authApi.register(input);
+      persistTokens(res);
+      let me: UserResponseDto;
+      try {
+        me = await usersApi.me();
+      } catch {
+        me = {
+          id: res.user.id,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          fullName: `${input.firstName} ${input.lastName}`.trim(),
+          email: input.email,
+          phoneNumber: null,
+          profileImageUrl: null,
+          preferredLanguage: "ar",
+          isActive: true,
+          createdAtUtc: new Date().toISOString(),
+          roles: res.roles || [],
+        };
+      }
+      const next = toAuthUser(me, res.roles);
+      setUser(next);
+      return next;
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
-    await api("/api/auth/logout", { method: "POST" });
+    try {
+      await authApi.logout();
+    } catch {
+      /* ignore network errors on logout */
+    }
+    clearStoredTokens();
     setUser(null);
   }, []);
 

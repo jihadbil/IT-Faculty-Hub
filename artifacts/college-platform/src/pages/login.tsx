@@ -4,11 +4,12 @@ import { motion } from "framer-motion";
 import { GraduationCap, LogIn, Loader2, AlertCircle } from "lucide-react";
 import { Input, Button } from "@/components/ui/shared";
 import { useAuth } from "@/lib/auth";
+import { EXTERNAL_API_BASE_URL } from "@/lib/external-api";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const user = await login(username, password);
+      const user = await login(email, password);
       setLocation(user.role === "admin" ? "/admin" : user.role === "teacher" ? "/" : "/student");
     } catch (err: any) {
       setError(err?.message || "فشل تسجيل الدخول");
@@ -47,12 +48,13 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-bold text-foreground mb-2">اسم المستخدم</label>
+              <label className="block text-sm font-bold text-foreground mb-2">البريد الإلكتروني</label>
               <Input
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                placeholder="username"
-                autoComplete="username"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="name@example.com"
+                autoComplete="email"
                 required
                 dir="ltr"
               />
@@ -72,9 +74,9 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 text-destructive text-sm">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-destructive/10 text-destructive text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="break-words">{error}</span>
               </div>
             )}
 
@@ -86,13 +88,14 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-border text-center text-sm">
             <span className="text-muted-foreground">لست مسجلاً؟ </span>
             <Link href="/register">
-              <span className="text-primary font-bold hover:underline cursor-pointer">أنشئ حساب طالب</span>
+              <span className="text-primary font-bold hover:underline cursor-pointer">أنشئ حساب جديد</span>
             </Link>
           </div>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          المدير العام: <span className="font-mono" dir="ltr">admin</span> / <span className="font-mono" dir="ltr">admin123</span> · الأستاذ: <span className="font-mono" dir="ltr">teacher</span> / <span className="font-mono" dir="ltr">teacher123</span>
+        <p className="text-center text-xs text-muted-foreground mt-6 leading-relaxed">
+          متصل بـ API:{" "}
+          <span className="font-mono break-all" dir="ltr">{EXTERNAL_API_BASE_URL}</span>
         </p>
       </motion.div>
     </div>

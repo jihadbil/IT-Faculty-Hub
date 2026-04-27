@@ -1,369 +1,384 @@
 import React, { useState } from "react";
-import { useRoute, Redirect } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "@/lib/auth";
-import { 
-  useGetCourse, 
-  useGetLectures, 
-  useCreateLecture, 
-  useDeleteLecture,
-  useGetFiles,
-  useUploadFile,
-  useDeleteFile
-} from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { PlayCircle, FileText, Plus, Trash2, Clock, UploadCloud, File as FileIcon, ExternalLink } from "lucide-react";
+import { useRoute, Redirect, Link } from "wouter";
+import { motion } from "framer-motion";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  PlayCircle,
+  Plus,
+  Trash2,
+  Clock,
+  UploadCloud,
+  ExternalLink,
+  ArrowRight,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
 import { Button, Card, Modal, Input, Badge } from "@/components/ui/shared";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { formatBytes } from "@/lib/utils";
-
-const lectureSchema = z.object({
-  title: z.string().min(2, "مطلوب"),
-  description: z.string().optional(),
-  lectureNumber: z.coerce.number().min(1),
-  duration: z.coerce.number().optional(),
-});
-
-type LectureFormValues = z.infer<typeof lectureSchema>;
+import { useAuth } from "@/lib/auth";
+import { useCourse, useCourseVideos, colorForCourse } from "@/lib/queries";
+import {
+  videosApi,
+  asNumber,
+  type VideoLectureResponseDto,
+  type Uuid,
+  type ScheduleResponseDto,
+} from "@/lib/external-api";
 
 export default function CourseDetails() {
   const { user } = useAuth();
   const [, paramsTeacher] = useRoute("/courses/:id");
   const [, paramsAdmin] = useRoute("/admin/courses/:id");
-  const idStr = paramsTeacher?.id ?? paramsAdmin?.id;
-  const courseId = idStr ? parseInt(idStr) : 0;
+  const courseId: Uuid | undefined = paramsTeacher?.id ?? paramsAdmin?.id;
 
   const queryClient = useQueryClient();
-  const { data: course, isLoading: loadingCourse } = useGetCourse(courseId);
-  const canEdit = user?.role === "admin" || (user?.role === "teacher" && (course as any)?.teacherId === user.id);
-  const isTeacherButNotOwner = user?.role === "teacher" && course && (course as any).teacherId !== user.id;
-  const { data: lectures = [], isLoading: loadingLectures } = useGetLectures({ courseId });
-  const { data: files = [], isLoading: loadingFiles } = useGetFiles({ courseId });
-  
-  const createLecture = useCreateLecture();
-  const deleteLecture = useDeleteLecture();
-  const uploadFile = useUploadFile();
-  const deleteFile = useDeleteFile();
+  const { data: course, isLoading: loadingCourse, error } = useCourse(courseId);
+  const { data: videos = [], isLoading: loadingVideos } = useCourseVideos(courseId);
 
-  const [activeTab, setActiveTab] = useState<'lectures' | 'files'>('lectures');
-  const [isAddLectureOpen, setIsAddLectureOpen] = useState(false);
+  const isAdmin = user?.role === "admin";
+  const isOwnerTeacher = user?.role === "teacher" && course?.professor?.id === user?.id;
+  const canEdit = isAdmin || isOwnerTeacher;
+  const isTeacherButNotOwner = user?.role === "teacher" && course && course.professor?.id !== user.id;
+
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  const { register: regLecture, handleSubmit: submitLecture, reset: resetLecture } = useForm<LectureFormValues>({
-    resolver: zodResolver(lectureSchema),
-    defaultValues: { lectureNumber: (lectures.length || 0) + 1 }
+  const deleteVideo = useMutation({
+    mutationFn: (id: number) => videosApi.remove(courseId!, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] }),
   });
 
-  const onAddLecture = (data: LectureFormValues) => {
-    createLecture.mutate({ data: { ...data, courseId } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/lectures"] });
-        setIsAddLectureOpen(false);
-        resetLecture({ lectureNumber: lectures.length + 2 });
-      }
-    });
-  };
-
-  const [fileState, setFileState] = useState<{ file: File | null, title: string, type: 'pdf' | 'video', lectureId?: number }>({
-    file: null, title: '', type: 'pdf'
+  const publishVideo = useMutation({
+    mutationFn: (id: number) => videosApi.publish(courseId!, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] }),
   });
-
-  const onUpload = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fileState.file || !fileState.title) return;
-    
-    uploadFile.mutate({ 
-      data: {
-        file: fileState.file as unknown as Blob,
-        title: fileState.title,
-        type: fileState.type,
-        courseId,
-        lectureId: fileState.lectureId || undefined
-      }
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/files"] });
-        setIsUploadOpen(false);
-        setFileState({ file: null, title: '', type: 'pdf' });
-      }
-    });
-  };
 
   if (loadingCourse) return <div className="p-12 text-center text-xl animate-pulse">جاري التحميل...</div>;
+  if (error)
+    return (
+      <Card className="p-6 border-destructive/40 bg-destructive/5 flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+        <div className="text-sm text-destructive">
+          <p className="font-bold">فشل تحميل المادة</p>
+          <p className="break-words mt-1">{(error as Error).message}</p>
+        </div>
+      </Card>
+    );
   if (!course) return <div className="p-12 text-center text-xl text-destructive">لم يتم العثور على المادة</div>;
   if (isTeacherButNotOwner) return <Redirect to="/courses" />;
 
+  const color = colorForCourse(course.id);
+
   return (
     <div className="space-y-8">
-      {/* Course Header */}
-      <div 
-        className="relative rounded-3xl overflow-hidden shadow-xl p-8 md:p-12 text-white"
-        style={{ backgroundColor: course.color || '#1e40af' }}
-      >
+      <Link href={isAdmin ? "/admin/courses" : "/courses"}>
+        <span className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary cursor-pointer text-sm font-bold transition-colors">
+          <ArrowRight className="w-4 h-4" />
+          العودة إلى المواد
+        </span>
+      </Link>
+
+      <div className="relative rounded-3xl overflow-hidden shadow-xl p-8 md:p-12 text-white" style={{ backgroundColor: color }}>
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-          <div>
+          <div className="min-w-0 flex-1">
             <Badge variant="outline" className="bg-white/20 text-white border-white/30 mb-4 font-mono">
-              {course.code}
+              {course.courseCode}
             </Badge>
-            <h1 className="text-4xl md:text-5xl font-display font-bold mb-3">{course.name}</h1>
-            <p className="text-white/80 max-w-2xl text-lg">{course.description || "لا يوجد وصف"}</p>
+            <h1 className="text-4xl md:text-5xl font-display font-bold mb-3 break-words">{course.courseName}</h1>
+            <p className="text-white/80 max-w-2xl text-lg break-words">{course.description || "لا يوجد وصف"}</p>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm text-white/80">
+              <span>📍 {course.department}</span>
+              <span>👤 {course.professor?.fullName || "—"}</span>
+              <span dir="ltr">📅 {course.semester} • {course.academicYear}</span>
+            </div>
           </div>
           <div className="flex gap-4 text-center">
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-4 min-w-[100px]">
-              <div className="text-3xl font-bold mb-1">{lectures.length}</div>
-              <div className="text-white/70 text-sm">محاضرة</div>
+              <div className="text-3xl font-bold mb-1">{videos.length}</div>
+              <div className="text-white/70 text-sm">فيديو</div>
             </div>
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-4 min-w-[100px]">
-              <div className="text-3xl font-bold mb-1">{files.length}</div>
-              <div className="text-white/70 text-sm">ملف</div>
+              <div className="text-3xl font-bold mb-1">{asNumber(course.enrolledStudentsCount)}</div>
+              <div className="text-white/70 text-sm">طالب</div>
+            </div>
+            <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-4 min-w-[100px]">
+              <div className="text-3xl font-bold mb-1">{asNumber(course.credits)}</div>
+              <div className="text-white/70 text-sm">وحدة</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-border">
-        <button
-          onClick={() => setActiveTab('lectures')}
-          className={`pb-4 px-6 text-lg font-bold transition-all border-b-4 ${activeTab === 'lectures' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-        >
-          المحاضرات
-        </button>
-        <button
-          onClick={() => setActiveTab('files')}
-          className={`pb-4 px-6 text-lg font-bold transition-all border-b-4 ${activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-        >
-          ملفات المادة
-        </button>
+      {course.schedules?.length > 0 && (
+        <Card className="p-6">
+          <h2 className="text-xl font-display font-bold mb-4">أوقات المحاضرات</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {course.schedules.map((s: ScheduleResponseDto) => (
+              <div key={s.id} className="p-4 rounded-2xl bg-muted/40 border border-border">
+                <p className="font-bold text-foreground">{s.dayOfWeek}</p>
+                <p className="text-sm text-muted-foreground mt-1" dir="ltr">{s.startTime} - {s.endTime}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {[s.building, s.room].filter(Boolean).join(" - ") || "بدون قاعة"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-display font-bold">المحاضرات المرئية</h2>
+          {canEdit && (
+            <Button onClick={() => setIsUploadOpen(true)} className="gap-2">
+              <UploadCloud className="w-5 h-5" /> رفع فيديو
+            </Button>
+          )}
+        </div>
+
+        {loadingVideos ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-48 bg-muted rounded-2xl animate-pulse" />)}
+          </div>
+        ) : videos.length === 0 ? (
+          <Card className="p-16 text-center border-dashed bg-transparent">
+            <PlayCircle className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+            <h3 className="text-xl font-bold mb-2">لا توجد محاضرات مرئية</h3>
+            <p className="text-muted-foreground">
+              {canEdit ? "ابدأ برفع أول فيديو لهذه المادة." : "لم يتم رفع أي فيديو بعد."}
+            </p>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[...videos]
+              .sort((a, b) => asNumber(a.videoOrder) - asNumber(b.videoOrder))
+              .map((v) => (
+                <VideoCard
+                  key={v.id}
+                  video={v}
+                  canEdit={canEdit}
+                  color={color}
+                  onDelete={(id) => {
+                    if (confirm("حذف هذا الفيديو؟")) deleteVideo.mutate(id);
+                  }}
+                  onPublish={(id) => publishVideo.mutate(id)}
+                  isPublishing={publishVideo.isPending}
+                />
+              ))}
+          </div>
+        )}
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
-          {activeTab === 'lectures' && (
-            <div className="space-y-6">
-              {canEdit && (
-                <div className="flex justify-end">
-                  <Button onClick={() => setIsAddLectureOpen(true)} className="gap-2">
-                    <Plus className="w-5 h-5" /> إضافة محاضرة
-                  </Button>
-                </div>
-              )}
-              
-              {lectures.length === 0 ? (
-                <Card className="p-16 text-center border-dashed bg-transparent">
-                  <PlayCircle className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                  <h3 className="text-xl font-bold mb-2">لا توجد محاضرات</h3>
-                  <p className="text-muted-foreground">انقر على إضافة محاضرة للبدء.</p>
-                </Card>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {lectures.map((lecture) => (
-                    <Card key={lecture.id} className="p-6 flex flex-col group hover:border-primary/30 transition-all">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-display font-bold text-xl">
-                          {lecture.lectureNumber}
-                        </div>
-                        {canEdit && (
-                          <button 
-                            onClick={() => {
-                              if(confirm('حذف المحاضرة؟')) deleteLecture.mutate({ id: lecture.id }, {
-                                onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/lectures"] })
-                              });
-                            }}
-                            className="text-muted-foreground hover:text-destructive p-2 opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2">{lecture.title}</h3>
-                      <p className="text-muted-foreground text-sm flex-1">{lecture.description || 'لا يوجد وصف'}</p>
-                      
-                      {lecture.duration && (
-                        <div className="mt-4 flex items-center gap-2 text-sm font-medium text-accent">
-                          <Clock className="w-4 h-4" /> {lecture.duration} دقيقة
-                        </div>
-                      )}
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'files' && (
-            <div className="space-y-6">
-              {canEdit && (
-                <div className="flex justify-end">
-                  <Button onClick={() => setIsUploadOpen(true)} className="gap-2 bg-secondary hover:bg-secondary/90 shadow-secondary/20">
-                    <UploadCloud className="w-5 h-5" /> رفع ملف
-                  </Button>
-                </div>
-              )}
-              
-              {files.length === 0 ? (
-                <Card className="p-16 text-center border-dashed bg-transparent">
-                  <FileIcon className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                  <h3 className="text-xl font-bold mb-2">لا توجد ملفات</h3>
-                  <p className="text-muted-foreground">قم برفع مذكرات، كتب، أو فيديوهات تخص المادة.</p>
-                </Card>
-              ) : (
-                <div className="bg-white rounded-2xl shadow-sm border border-border overflow-hidden">
-                  <table className="w-full text-sm text-right">
-                    <thead className="bg-muted/50 text-muted-foreground font-medium border-b border-border">
-                      <tr>
-                        <th className="p-4">النوع</th>
-                        <th className="p-4">اسم الملف</th>
-                        <th className="p-4">المحاضرة المرتبطة</th>
-                        <th className="p-4">الحجم</th>
-                        <th className="p-4">إجراء</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {files.map((file) => (
-                        <tr key={file.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="p-4">
-                            {file.type === 'pdf' ? (
-                              <div className="w-10 h-10 rounded-lg bg-rose-500/10 text-rose-600 flex items-center justify-center">
-                                <FileText className="w-5 h-5" />
-                              </div>
-                            ) : (
-                              <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
-                                <PlayCircle className="w-5 h-5" />
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-4 font-bold text-foreground">{file.title}</td>
-                          <td className="p-4 text-muted-foreground">
-                            {file.lectureId ? lectures.find(l => l.id === file.lectureId)?.title : 'عام'}
-                          </td>
-                          <td className="p-4 text-muted-foreground" dir="ltr">{formatBytes(file.size)}</td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <a href={file.url} target="_blank" rel="noreferrer" className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors">
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                              <button 
-                                onClick={() => {
-                                  if(confirm('حذف الملف؟')) deleteFile.mutate({ id: file.id }, {
-                                    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/files"] })
-                                  });
-                                }}
-                                className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Modals */}
-      <Modal isOpen={isAddLectureOpen} onClose={() => setIsAddLectureOpen(false)} title="إضافة محاضرة جديدة">
-        <form onSubmit={submitLecture(onAddLecture)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold mb-2">عنوان المحاضرة</label>
-            <Input {...regLecture("title")} placeholder="مثال: مقدمة في الخوارزميات" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold mb-2">وصف مختصر</label>
-            <Input {...regLecture("description")} placeholder="عن ماذا تتحدث المحاضرة..." />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">رقم المحاضرة</label>
-              <Input type="number" {...regLecture("lectureNumber")} />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">المدة (دقائق)</label>
-              <Input type="number" {...regLecture("duration")} placeholder="60" />
-            </div>
-          </div>
-          <div className="pt-4 flex justify-end gap-3">
-            <Button type="button" variant="ghost" onClick={() => setIsAddLectureOpen(false)}>إلغاء</Button>
-            <Button type="submit" isLoading={createLecture.isPending}>حفظ المحاضرة</Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} title="رفع ملف جديد">
-        <form onSubmit={onUpload} className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold mb-2">عنوان الملف</label>
-            <Input 
-              required 
-              value={fileState.title} 
-              onChange={e => setFileState(prev => ({...prev, title: e.target.value}))} 
-              placeholder="مثال: مذكرة الفصل الأول" 
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">نوع الملف</label>
-              <select 
-                className="flex h-12 w-full rounded-xl border-2 border-muted bg-white px-4 py-2 text-sm outline-none focus:border-primary"
-                value={fileState.type}
-                onChange={e => setFileState(prev => ({...prev, type: e.target.value as 'pdf'|'video'}))}
-              >
-                <option value="pdf">مستند (PDF)</option>
-                <option value="video">مقطع فيديو</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">ربط بمحاضرة (اختياري)</label>
-              <select 
-                className="flex h-12 w-full rounded-xl border-2 border-muted bg-white px-4 py-2 text-sm outline-none focus:border-primary"
-                value={fileState.lectureId || ""}
-                onChange={e => setFileState(prev => ({...prev, lectureId: e.target.value ? parseInt(e.target.value) : undefined}))}
-              >
-                <option value="">-- عام للمادة --</option>
-                {lectures.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold mb-2">الملف</label>
-            <div className="border-2 border-dashed border-muted rounded-2xl p-8 text-center relative hover:bg-muted/30 transition-colors">
-              <input 
-                type="file" 
-                required 
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept={fileState.type === 'pdf' ? '.pdf' : 'video/*'}
-                onChange={e => {
-                  if(e.target.files?.length) {
-                    setFileState(prev => ({...prev, file: e.target.files![0]}));
-                  }
-                }}
-              />
-              <UploadCloud className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-              <p className="font-bold text-primary">
-                {fileState.file ? fileState.file.name : "انقر لاختيار الملف أو اسحب وأفلت هنا"}
-              </p>
-            </div>
-          </div>
-          <div className="pt-4 flex justify-end gap-3">
-            <Button type="button" variant="ghost" onClick={() => setIsUploadOpen(false)}>إلغاء</Button>
-            <Button type="submit" isLoading={uploadFile.isPending} className="bg-secondary">بدء الرفع</Button>
-          </div>
-        </form>
-      </Modal>
+      <UploadVideoModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        courseId={course.id}
+        nextOrder={videos.length + 1}
+      />
     </div>
   );
 }
+
+function VideoCard({
+  video,
+  canEdit,
+  color,
+  onDelete,
+  onPublish,
+  isPublishing,
+}: {
+  video: VideoLectureResponseDto;
+  canEdit: boolean;
+  color: string;
+  onDelete: (id: number) => void;
+  onPublish: (id: number) => void;
+  isPublishing: boolean;
+}) {
+  return (
+    <Card className="p-6 flex flex-col group hover:border-primary/30 transition-all">
+      <div className="flex justify-between items-start mb-4">
+        <div
+          className="w-12 h-12 rounded-xl text-white flex items-center justify-center font-display font-bold text-xl"
+          style={{ backgroundColor: color }}
+        >
+          {asNumber(video.videoOrder)}
+        </div>
+        <div className="flex items-center gap-2">
+          {video.isPublished ? (
+            <Badge variant="success" className="gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> منشور
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1 text-amber-700 border-amber-300 bg-amber-50">
+              <XCircle className="w-3.5 h-3.5" /> مسودة
+            </Badge>
+          )}
+        </div>
+      </div>
+      <h3 className="text-xl font-bold mb-2 break-words">{video.title}</h3>
+      <p className="text-muted-foreground text-sm flex-1 break-words">{video.description || "لا يوجد وصف"}</p>
+
+      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Eye className="w-3.5 h-3.5" /> {asNumber(video.viewCount)} مشاهدة
+        </span>
+        {video.durationSeconds && (
+          <span className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> {Math.round(asNumber(video.durationSeconds) / 60)} د
+          </span>
+        )}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
+        {video.videoUrl && (
+          <a
+            href={video.videoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:bg-muted text-foreground text-sm font-bold transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" /> فتح
+          </a>
+        )}
+        {canEdit && !video.isPublished && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onPublish(video.id)}
+            disabled={isPublishing}
+            className="gap-1"
+          >
+            <CheckCircle2 className="w-4 h-4" /> نشر
+          </Button>
+        )}
+        {canEdit && (
+          <button
+            onClick={() => onDelete(video.id)}
+            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+            aria-label="حذف"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function UploadVideoModal({
+  isOpen,
+  onClose,
+  courseId,
+  nextOrder,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  courseId: Uuid;
+  nextOrder: number;
+}) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [order, setOrder] = useState(nextOrder);
+  const [video, setVideo] = useState<File | null>(null);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen) setOrder(nextOrder);
+  }, [isOpen, nextOrder]);
+
+  const upload = useMutation({
+    mutationFn: () =>
+      videosApi.create(courseId, {
+        title,
+        description: description || undefined,
+        videoOrder: order,
+        video: video!,
+        thumbnail: thumbnail || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] });
+      onClose();
+      setTitle("");
+      setDescription("");
+      setVideo(null);
+      setThumbnail(null);
+    },
+  });
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!video) return;
+    upload.mutate();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="رفع محاضرة فيديو جديدة">
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-bold mb-2">عنوان المحاضرة</label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="مقدمة في الخوارزميات"
+            required
+            maxLength={300}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-bold mb-2">وصف مختصر</label>
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="عن ماذا تتحدث المحاضرة..."
+            maxLength={1000}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-bold mb-2">ترتيب الفيديو</label>
+          <Input type="number" min={1} max={999} value={order} onChange={(e) => setOrder(Number(e.target.value))} />
+        </div>
+        <div>
+          <label className="block text-sm font-bold mb-2">ملف الفيديو</label>
+          <div className="border-2 border-dashed border-muted rounded-2xl p-6 text-center relative hover:bg-muted/30 transition-colors">
+            <input
+              type="file"
+              required
+              accept="video/*"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              onChange={(e) => e.target.files?.[0] && setVideo(e.target.files[0])}
+            />
+            <UploadCloud className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+            <p className="font-bold text-primary text-sm">{video ? video.name : "انقر لاختيار ملف الفيديو"}</p>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-bold mb-2">صورة مصغّرة (اختياري)</label>
+          <div className="border-2 border-dashed border-muted rounded-2xl p-4 text-center relative hover:bg-muted/30 transition-colors">
+            <input
+              type="file"
+              accept="image/*"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              onChange={(e) => e.target.files?.[0] && setThumbnail(e.target.files[0])}
+            />
+            <p className="text-sm text-muted-foreground">{thumbnail ? thumbnail.name : "اختر صورة مصغّرة"}</p>
+          </div>
+        </div>
+
+        {upload.isError && (
+          <p className="text-sm text-destructive break-words">{(upload.error as Error).message}</p>
+        )}
+
+        <div className="pt-4 flex justify-end gap-3">
+          <Button type="button" variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button type="submit" isLoading={upload.isPending} disabled={!video}>
+            <Plus className="w-4 h-4 ms-2" /> رفع
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
