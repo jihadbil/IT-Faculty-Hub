@@ -35,7 +35,7 @@ export default function StudentHome() {
           endTime: s.endTime,
           dayOfWeek: s.dayOfWeek,
           building: s.building,
-          room: s.room,
+          room: s.roomNumber,
         });
       }
     }

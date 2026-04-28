@@ -14,6 +14,12 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Video,
+  ClipboardCheck,
+  CalendarCheck,
+  ClipboardList,
+  RadioTower,
+  Users as UsersIcon,
 } from "lucide-react";
 import { Button, Card, Modal, Input, Badge } from "@/components/ui/shared";
 import { useAuth } from "@/lib/auth";
@@ -25,6 +31,25 @@ import {
   type Uuid,
   type ScheduleResponseDto,
 } from "@/lib/external-api";
+import {
+  AssessmentsTab,
+  AttendanceTab,
+  ExamsTab,
+  LiveSessionsTab,
+  StudentsTab,
+} from "@/components/course-tabs";
+import { cn } from "@/lib/utils";
+
+type TabKey = "videos" | "assessments" | "attendance" | "exams" | "live" | "students";
+
+const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "videos", label: "الفيديوهات", icon: Video },
+  { key: "assessments", label: "التقييمات", icon: ClipboardCheck },
+  { key: "attendance", label: "الحضور", icon: CalendarCheck },
+  { key: "exams", label: "الامتحانات", icon: ClipboardList },
+  { key: "live", label: "البث المباشر", icon: RadioTower },
+  { key: "students", label: "الطلاب", icon: UsersIcon },
+];
 
 export default function CourseDetails() {
   const { user } = useAuth();
@@ -32,26 +57,15 @@ export default function CourseDetails() {
   const [, paramsAdmin] = useRoute("/admin/courses/:id");
   const courseId: Uuid | undefined = paramsTeacher?.id ?? paramsAdmin?.id;
 
-  const queryClient = useQueryClient();
   const { data: course, isLoading: loadingCourse, error } = useCourse(courseId);
-  const { data: videos = [], isLoading: loadingVideos } = useCourseVideos(courseId);
+  const { data: videos = [] } = useCourseVideos(courseId);
+
+  const [tab, setTab] = useState<TabKey>("videos");
 
   const isAdmin = user?.role === "admin";
   const isOwnerTeacher = user?.role === "teacher" && course?.professor?.id === user?.id;
   const canEdit = isAdmin || isOwnerTeacher;
   const isTeacherButNotOwner = user?.role === "teacher" && course && course.professor?.id !== user.id;
-
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
-
-  const deleteVideo = useMutation({
-    mutationFn: (id: number) => videosApi.remove(courseId!, id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] }),
-  });
-
-  const publishVideo = useMutation({
-    mutationFn: (id: number) => videosApi.publish(courseId!, id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] }),
-  });
 
   if (loadingCourse) return <div className="p-12 text-center text-xl animate-pulse">جاري التحميل...</div>;
   if (error)
@@ -119,7 +133,7 @@ export default function CourseDetails() {
                 <p className="font-bold text-foreground">{s.dayOfWeek}</p>
                 <p className="text-sm text-muted-foreground mt-1" dir="ltr">{s.startTime} - {s.endTime}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {[s.building, s.room].filter(Boolean).join(" - ") || "بدون قاعة"}
+                  {[s.building, s.roomNumber].filter(Boolean).join(" - ") || "بدون قاعة"}
                 </p>
               </div>
             ))}
@@ -127,53 +141,104 @@ export default function CourseDetails() {
         </Card>
       )}
 
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-display font-bold">المحاضرات المرئية</h2>
-          {canEdit && (
-            <Button onClick={() => setIsUploadOpen(true)} className="gap-2">
-              <UploadCloud className="w-5 h-5" /> رفع فيديو
-            </Button>
-          )}
+      {/* Tabs */}
+      <div className="bg-white rounded-2xl border border-border p-2 overflow-x-auto">
+        <div className="flex gap-1 min-w-max">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
+                tab === t.key
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              <t.icon className="w-4 h-4" />
+              {t.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {loadingVideos ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-48 bg-muted rounded-2xl animate-pulse" />)}
-          </div>
-        ) : videos.length === 0 ? (
-          <Card className="p-16 text-center border-dashed bg-transparent">
-            <PlayCircle className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="text-xl font-bold mb-2">لا توجد محاضرات مرئية</h3>
-            <p className="text-muted-foreground">
-              {canEdit ? "ابدأ برفع أول فيديو لهذه المادة." : "لم يتم رفع أي فيديو بعد."}
-            </p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...videos]
-              .sort((a, b) => asNumber(a.videoOrder) - asNumber(b.videoOrder))
-              .map((v) => (
-                <VideoCard
-                  key={v.id}
-                  video={v}
-                  canEdit={canEdit}
-                  color={color}
-                  onDelete={(id) => {
-                    if (confirm("حذف هذا الفيديو؟")) deleteVideo.mutate(id);
-                  }}
-                  onPublish={(id) => publishVideo.mutate(id)}
-                  isPublishing={publishVideo.isPending}
-                />
-              ))}
-          </div>
+      {tab === "videos" && (
+        <VideosTab courseId={course.id} canEdit={canEdit} color={color} />
+      )}
+      {tab === "assessments" && <AssessmentsTab courseId={course.id} canEdit={canEdit} />}
+      {tab === "attendance" && <AttendanceTab courseId={course.id} canEdit={canEdit} />}
+      {tab === "exams" && <ExamsTab courseId={course.id} canEdit={canEdit} />}
+      {tab === "live" && <LiveSessionsTab courseId={course.id} canEdit={canEdit} />}
+      {tab === "students" && <StudentsTab courseId={course.id} canEdit={canEdit} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// Videos tab (was the original page body)
+// ─────────────────────────────────────────
+function VideosTab({ courseId, canEdit, color }: { courseId: Uuid; canEdit: boolean; color: string }) {
+  const queryClient = useQueryClient();
+  const { data: videos = [], isLoading } = useCourseVideos(courseId);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+
+  const deleteVideo = useMutation({
+    mutationFn: (id: number) => videosApi.remove(courseId, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] }),
+  });
+
+  const publishVideo = useMutation({
+    mutationFn: (id: number) => videosApi.publish(courseId, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "course", courseId, "videos"] }),
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-display font-bold">المحاضرات المرئية</h2>
+        {canEdit && (
+          <Button onClick={() => setIsUploadOpen(true)} className="gap-2">
+            <UploadCloud className="w-5 h-5" /> رفع فيديو
+          </Button>
         )}
       </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-48 bg-muted rounded-2xl animate-pulse" />)}
+        </div>
+      ) : videos.length === 0 ? (
+        <Card className="p-16 text-center border-dashed bg-transparent">
+          <PlayCircle className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+          <h3 className="text-xl font-bold mb-2">لا توجد محاضرات مرئية</h3>
+          <p className="text-muted-foreground">
+            {canEdit ? "ابدأ برفع أول فيديو لهذه المادة." : "لم يتم رفع أي فيديو بعد."}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[...videos]
+            .sort((a, b) => asNumber(a.videoOrder) - asNumber(b.videoOrder))
+            .map((v) => (
+              <VideoCard
+                key={v.id}
+                video={v}
+                canEdit={canEdit}
+                color={color}
+                onDelete={(id) => {
+                  if (confirm("حذف هذا الفيديو؟")) deleteVideo.mutate(id);
+                }}
+                onPublish={(id) => publishVideo.mutate(id)}
+                isPublishing={publishVideo.isPending}
+              />
+            ))}
+        </div>
+      )}
 
       <UploadVideoModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        courseId={course.id}
+        courseId={courseId}
         nextOrder={videos.length + 1}
       />
     </div>
@@ -221,19 +286,19 @@ function VideoCard({
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
-          <Eye className="w-3.5 h-3.5" /> {asNumber(video.viewCount)} مشاهدة
+          <Eye className="w-3.5 h-3.5" /> {asNumber(video.views)} مشاهدة
         </span>
-        {video.durationSeconds && (
+        {video.durationSeconds ? (
           <span className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" /> {Math.round(asNumber(video.durationSeconds) / 60)} د
           </span>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
-        {video.videoUrl && (
+        {video.streamUrl && (
           <a
-            href={video.videoUrl}
+            href={video.streamUrl}
             target="_blank"
             rel="noreferrer"
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:bg-muted text-foreground text-sm font-bold transition-colors"
@@ -381,4 +446,3 @@ function UploadVideoModal({
     </Modal>
   );
 }
-

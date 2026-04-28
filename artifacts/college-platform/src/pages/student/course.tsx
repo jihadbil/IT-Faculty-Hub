@@ -1,22 +1,60 @@
 import React, { useState } from "react";
 import { Link, useRoute } from "wouter";
 import { motion } from "framer-motion";
-import { useMutation } from "@tanstack/react-query";
-import { BookOpen, ArrowRight, Clock, Users, Video, ExternalLink, AlertCircle, PlayCircle, Eye } from "lucide-react";
-import { Card, Badge, Button } from "@/components/ui/shared";
-import { useCourse, useCourseVideos, colorForCourse } from "@/lib/queries";
-import { videosApi, asNumber, type VideoLectureResponseDto } from "@/lib/external-api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  BookOpen,
+  ArrowRight,
+  Clock,
+  Users,
+  Video,
+  ExternalLink,
+  AlertCircle,
+  PlayCircle,
+  Eye,
+  ClipboardCheck,
+  CalendarCheck,
+  ClipboardList,
+  RadioTower,
+  Power,
+} from "lucide-react";
+import { Card, Badge, Button, Modal } from "@/components/ui/shared";
+import { useCourse, useCourseVideos, colorForCourse, useMyEnrollments } from "@/lib/queries";
+import { videosApi, enrollmentsApi, asNumber, type VideoLectureResponseDto } from "@/lib/external-api";
+import { AssessmentsTab, AttendanceTab, ExamsTab, LiveSessionsTab } from "@/components/course-tabs";
+import { cn } from "@/lib/utils";
+
+type TabKey = "videos" | "assessments" | "attendance" | "exams" | "live";
+
+const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "videos", label: "الفيديوهات", icon: Video },
+  { key: "assessments", label: "درجاتي", icon: ClipboardCheck },
+  { key: "attendance", label: "حضوري", icon: CalendarCheck },
+  { key: "exams", label: "الامتحانات", icon: ClipboardList },
+  { key: "live", label: "البث المباشر", icon: RadioTower },
+];
 
 export default function StudentCourse() {
   const [, params] = useRoute("/student/courses/:id");
   const courseId = params?.id;
+  const qc = useQueryClient();
   const { data: course, isLoading, error } = useCourse(courseId);
   const { data: videos = [] } = useCourseVideos(courseId);
+  const { data: enrollments = [] } = useMyEnrollments();
 
   const [activeVideo, setActiveVideo] = useState<VideoLectureResponseDto | null>(null);
+  const [tab, setTab] = useState<TabKey>("videos");
 
   const recordView = useMutation({
     mutationFn: (videoId: number) => videosApi.view(courseId!, videoId),
+  });
+
+  const unenroll = useMutation({
+    mutationFn: () => enrollmentsApi.unenroll(courseId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["external"] });
+      window.location.href = "/student/courses";
+    },
   });
 
   if (isLoading) {
@@ -44,6 +82,7 @@ export default function StudentCourse() {
 
   const color = colorForCourse(course.id);
   const published = videos.filter((v) => v.isPublished);
+  const isEnrolled = enrollments.some((e) => e.courseId === course.id);
 
   return (
     <div className="space-y-8">
@@ -79,6 +118,19 @@ export default function StudentCourse() {
                 <p className="text-foreground/80 mt-4 leading-relaxed break-words">{course.description}</p>
               )}
             </div>
+            {isEnrolled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm("إلغاء تسجيلي من هذه المادة؟")) unenroll.mutate();
+                }}
+                disabled={unenroll.isPending}
+                className="gap-1 shrink-0"
+              >
+                <Power className="w-4 h-4" /> إلغاء التسجيل
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-border">
@@ -97,69 +149,96 @@ export default function StudentCourse() {
               <div key={s.id} className="p-4 rounded-2xl bg-muted/30 border border-border">
                 <p className="font-bold text-foreground">{s.dayOfWeek}</p>
                 <p className="text-sm text-muted-foreground mt-1" dir="ltr">{s.startTime} - {s.endTime}</p>
-                <p className="text-xs text-muted-foreground mt-1">{[s.building, s.room].filter(Boolean).join(" - ") || "بدون قاعة"}</p>
+                <p className="text-xs text-muted-foreground mt-1">{[s.building, s.roomNumber].filter(Boolean).join(" - ") || "بدون قاعة"}</p>
               </div>
             ))}
           </div>
         </Card>
       )}
 
-      <div>
-        <h2 className="text-2xl font-display font-bold text-foreground mb-4">المحاضرات المرئية</h2>
-        {published.length === 0 ? (
-          <div className="py-16 text-center bg-white rounded-3xl border border-dashed border-border">
-            <Video className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">لم تتم إضافة أي محاضرة فيديو بعد.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...published]
-              .sort((a, b) => asNumber(a.videoOrder) - asNumber(b.videoOrder))
-              .map((v) => (
-                <Card key={v.id} className="overflow-hidden hover:shadow-xl transition-shadow">
-                  <div className="relative aspect-video bg-muted flex items-center justify-center group cursor-pointer" onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}>
-                    {v.thumbnailUrl ? (
-                      <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center" style={{ background: color }}>
-                        <PlayCircle className="w-16 h-16 text-white/80" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <PlayCircle className="w-16 h-16 text-white" />
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-lg text-foreground break-words">{v.title}</h3>
-                      <Badge variant="outline" className="shrink-0">#{asNumber(v.videoOrder)}</Badge>
-                    </div>
-                    {v.description && <p className="text-sm text-muted-foreground line-clamp-2 break-words">{v.description}</p>}
-                    <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {asNumber(v.viewCount)} مشاهدة</span>
-                      {v.durationSeconds && (
-                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {Math.round(asNumber(v.durationSeconds) / 60)} د</span>
-                      )}
-                    </div>
-                    {v.videoUrl && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="mt-3 gap-1 w-full"
-                        onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}
-                      >
-                        <PlayCircle className="w-4 h-4" /> مشاهدة
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              ))}
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="bg-white rounded-2xl border border-border p-2 overflow-x-auto">
+        <div className="flex gap-1 min-w-max">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
+                tab === t.key
+                  ? "bg-emerald-700 text-white shadow-md"
+                  : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              <t.icon className="w-4 h-4" />
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {activeVideo && activeVideo.videoUrl && (
+      {tab === "videos" && (
+        <div>
+          {published.length === 0 ? (
+            <div className="py-16 text-center bg-white rounded-3xl border border-dashed border-border">
+              <Video className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">لم تتم إضافة أي محاضرة فيديو بعد.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[...published]
+                .sort((a, b) => asNumber(a.videoOrder) - asNumber(b.videoOrder))
+                .map((v) => (
+                  <Card key={v.id} className="overflow-hidden hover:shadow-xl transition-shadow">
+                    <div className="relative aspect-video bg-muted flex items-center justify-center group cursor-pointer" onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}>
+                      {v.thumbnailUrl ? (
+                        <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center" style={{ background: color }}>
+                          <PlayCircle className="w-16 h-16 text-white/80" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <PlayCircle className="w-16 h-16 text-white" />
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-bold text-lg text-foreground break-words">{v.title}</h3>
+                        <Badge variant="outline" className="shrink-0">#{asNumber(v.videoOrder)}</Badge>
+                      </div>
+                      {v.description && <p className="text-sm text-muted-foreground line-clamp-2 break-words">{v.description}</p>}
+                      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {asNumber(v.views)} مشاهدة</span>
+                        {v.durationSeconds ? (
+                          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {Math.round(asNumber(v.durationSeconds) / 60)} د</span>
+                        ) : null}
+                      </div>
+                      {v.streamUrl && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="mt-3 gap-1 w-full"
+                          onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}
+                        >
+                          <PlayCircle className="w-4 h-4" /> مشاهدة
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "assessments" && <AssessmentsTab courseId={course.id} canEdit={false} studentMode />}
+      {tab === "attendance" && <AttendanceTab courseId={course.id} canEdit={false} studentMode />}
+      {tab === "exams" && <ExamsTab courseId={course.id} canEdit={false} studentMode />}
+      {tab === "live" && <LiveSessionsTab courseId={course.id} canEdit={false} studentMode />}
+
+      {activeVideo && activeVideo.streamUrl && (
         <div
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           onClick={() => setActiveVideo(null)}
@@ -167,11 +246,11 @@ export default function StudentCourse() {
           <div className="w-full max-w-4xl bg-black rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 bg-zinc-900 text-white">
               <h3 className="font-bold truncate">{activeVideo.title}</h3>
-              <a href={activeVideo.videoUrl} target="_blank" rel="noreferrer" className="text-white/70 hover:text-white text-sm flex items-center gap-1">
+              <a href={activeVideo.streamUrl} target="_blank" rel="noreferrer" className="text-white/70 hover:text-white text-sm flex items-center gap-1">
                 <ExternalLink className="w-4 h-4" /> فتح
               </a>
             </div>
-            <video src={activeVideo.videoUrl} controls autoPlay className="w-full aspect-video bg-black" />
+            <video src={activeVideo.streamUrl} controls autoPlay className="w-full aspect-video bg-black" />
           </div>
         </div>
       )}
@@ -182,7 +261,7 @@ export default function StudentCourse() {
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="text-center p-3 bg-muted/30 rounded-xl">
-      <p className="text-2xl font-bold text-primary">{value}</p>
+      <p className="text-2xl font-bold text-emerald-700">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );

@@ -2,9 +2,10 @@ import React, { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { BookOpen, Clock, Users, ArrowLeft, Search, AlertCircle } from "lucide-react";
-import { Input, Select, Card, Badge } from "@/components/ui/shared";
+import { Input, Select, Card, Badge, Button } from "@/components/ui/shared";
 import { useCoursesForRole, colorForCourse } from "@/lib/queries";
 import { asNumber } from "@/lib/external-api";
+import { Compass } from "lucide-react";
 
 export default function StudentCourses() {
   const [department, setDepartment] = useState<string>("");
@@ -38,8 +39,17 @@ export default function StudentCourses() {
   return (
     <div className="space-y-8">
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-border">
-        <h1 className="text-3xl font-display font-bold text-foreground mb-1">المواد الدراسية</h1>
-        <p className="text-muted-foreground mb-6">المواد التي أنت مسجّل بها — اضغط أي مادة لمشاهدة محاضراتها.</p>
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-display font-bold text-foreground mb-1">المواد الدراسية</h1>
+            <p className="text-muted-foreground">المواد التي أنت مسجّل بها — اضغط أي مادة لمشاهدة محاضراتها.</p>
+          </div>
+          <Link href="/student/browse">
+            <Button variant="outline" className="gap-2 shrink-0">
+              <Compass className="w-4 h-4" /> تصفّح المزيد
+            </Button>
+          </Link>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="relative md:col-span-1">

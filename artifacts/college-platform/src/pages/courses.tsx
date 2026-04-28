@@ -17,9 +17,8 @@ const courseSchema = z.object({
   description: z.string().max(1000).optional(),
   department: z.string().min(1, "القسم مطلوب").max(100),
   credits: z.coerce.number().min(1).max(6),
-  semester: z.string().optional(),
+  semester: z.coerce.number().min(0).max(2),
   academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
-  professorId: z.string().optional(),
 });
 
 type CourseFormValues = z.infer<typeof courseSchema>;
@@ -60,9 +59,8 @@ export default function Courses() {
         description: data.description || undefined,
         department: data.department,
         credits: data.credits,
-        semester: data.semester || undefined,
+        semester: data.semester,
         academicYear: data.academicYear,
-        professorId: data.professorId || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["external", "courses"] });
@@ -83,7 +81,7 @@ export default function Courses() {
     resolver: zodResolver(courseSchema),
     defaultValues: {
       credits: 3,
-      semester: "الفصل الأول",
+      semester: 0,
       academicYear: thisAcademicYear(),
     },
   });
@@ -206,9 +204,9 @@ export default function Courses() {
             <div>
               <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
               <Select {...register("semester")}>
-                <option value="الفصل الأول">الفصل الأول</option>
-                <option value="الفصل الثاني">الفصل الثاني</option>
-                <option value="الفصل الصيفي">الفصل الصيفي</option>
+                <option value={0}>الفصل الأول (Fall)</option>
+                <option value={1}>الفصل الثاني (Spring)</option>
+                <option value={2}>الفصل الصيفي (Summer)</option>
               </Select>
             </div>
             <div>
@@ -218,20 +216,9 @@ export default function Courses() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold mb-2">الأستاذ المسؤول</label>
-            <Select {...register("professorId")}>
-              <option value="">— بدون أستاذ —</option>
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>{t.fullName} ({t.email})</option>
-              ))}
-            </Select>
-            {teachers.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                لم يتم العثور على مستخدمين بدور أستاذ في الـ API.
-              </p>
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground">
+            ملاحظة: سيتم تعيين المادة تلقائياً للأستاذ الذي يقوم بإنشائها — لا يمكن تعيين أستاذ آخر من هنا.
+          </p>
 
           {createCourse.isError && (
             <p className="text-sm text-destructive break-words">

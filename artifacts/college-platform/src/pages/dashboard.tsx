@@ -49,7 +49,7 @@ export default function Dashboard() {
     const out: { id: number; courseName: string; courseId: string; startTime: string; endTime: string; building?: string | null; room?: string | null }[] = [];
     for (const c of fullCourses) {
       for (const s of c.schedules ?? []) {
-        out.push({ id: s.id, courseName: c.courseName, courseId: c.id, startTime: s.startTime, endTime: s.endTime, building: s.building, room: s.room });
+        out.push({ id: s.id, courseName: c.courseName, courseId: c.id, startTime: s.startTime, endTime: s.endTime, building: s.building, room: s.roomNumber });
       }
     }
     return out.sort((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 4);

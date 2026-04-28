@@ -11,19 +11,14 @@ import { useCoursesForRole, colorForCourse } from "@/lib/queries";
 import {
   coursesApi,
   schedulesApi,
+  dayLabelToIndex,
   type CourseResponseDto,
   type ScheduleResponseDto,
   type Uuid,
 } from "@/lib/external-api";
 
 const ARABIC_DAYS = [
-  "الأحد",
-  "الاثنين",
-  "الثلاثاء",
-  "الأربعاء",
-  "الخميس",
-  "الجمعة",
-  "السبت",
+  "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت",
 ] as const;
 
 const scheduleSchema = z.object({
@@ -32,7 +27,7 @@ const scheduleSchema = z.object({
   startTime: z.string().min(1),
   endTime: z.string().min(1),
   building: z.string().optional(),
-  room: z.string().optional(),
+  roomNumber: z.string().min(1, "أدخل رقم القاعة"),
 });
 type ScheduleFormValues = z.infer<typeof scheduleSchema>;
 
@@ -105,7 +100,6 @@ export default function Schedule() {
     defaultValues: { dayOfWeek: ARABIC_DAYS[0] },
   });
 
-  // When opening for edit, prefill form
   useEffect(() => {
     if (!editing) return;
     const entry = flat.find((e) => e.courseId === editing.courseId && e.id === editing.scheduleId);
@@ -116,7 +110,7 @@ export default function Schedule() {
       startTime: entry.startTime?.slice(0, 5) ?? "",
       endTime: entry.endTime?.slice(0, 5) ?? "",
       building: entry.building ?? "",
-      room: entry.room ?? "",
+      roomNumber: entry.roomNumber ?? "",
     });
   }, [editing, flat, reset]);
 
@@ -128,7 +122,7 @@ export default function Schedule() {
       startTime: "",
       endTime: "",
       building: "",
-      room: "",
+      roomNumber: "",
     });
     setIsModalOpen(true);
   };
@@ -145,12 +139,13 @@ export default function Schedule() {
 
   const upsert = useMutation({
     mutationFn: async (data: ScheduleFormValues) => {
+      const dayInt = dayLabelToIndex(data.dayOfWeek);
       const body = {
-        dayOfWeek: data.dayOfWeek,
+        dayOfWeek: dayInt,
         startTime: data.startTime,
         endTime: data.endTime,
-        building: data.building || undefined,
-        room: data.room || undefined,
+        building: data.building || null,
+        roomNumber: data.roomNumber,
       };
       if (editing) {
         return schedulesApi.update(editing.courseId, editing.scheduleId, body);
@@ -158,7 +153,6 @@ export default function Schedule() {
       return schedulesApi.create(data.courseId, body);
     },
     onSuccess: (_d, vars) => {
-      // invalidate the affected course (for both create and edit; on edit course is unchanged)
       const id = editing?.courseId ?? vars.courseId;
       queryClient.invalidateQueries({ queryKey: ["external", "course", id] });
       closeModal();
@@ -255,7 +249,7 @@ export default function Schedule() {
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="w-4 h-4 opacity-70" />
-                          <span>{[entry.building, entry.room].filter(Boolean).join(" - ") || "غير محدد"}</span>
+                          <span>{[entry.building, entry.roomNumber].filter(Boolean).join(" - ") || "غير محدد"}</span>
                         </div>
                       </div>
                     </div>
@@ -313,7 +307,8 @@ export default function Schedule() {
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">القاعة</label>
-              <Input {...register("room")} placeholder="قاعة 302" />
+              <Input {...register("roomNumber")} placeholder="قاعة 302" required />
+              {errors.roomNumber && <span className="text-xs text-destructive">{errors.roomNumber.message}</span>}
             </div>
           </div>
           {upsert.isError && (
@@ -333,20 +328,10 @@ function normalizeDay(d: string): string {
   if (!d) return "";
   if ((ARABIC_DAYS as readonly string[]).includes(d)) return d;
   const map: Record<string, string> = {
-    sunday: "الأحد",
-    monday: "الاثنين",
-    tuesday: "الثلاثاء",
-    wednesday: "الأربعاء",
-    thursday: "الخميس",
-    friday: "الجمعة",
-    saturday: "السبت",
-    "0": "الأحد",
-    "1": "الاثنين",
-    "2": "الثلاثاء",
-    "3": "الأربعاء",
-    "4": "الخميس",
-    "5": "الجمعة",
-    "6": "السبت",
+    sunday: "الأحد", monday: "الاثنين", tuesday: "الثلاثاء", wednesday: "الأربعاء",
+    thursday: "الخميس", friday: "الجمعة", saturday: "السبت",
+    "0": "الأحد", "1": "الاثنين", "2": "الثلاثاء", "3": "الأربعاء",
+    "4": "الخميس", "5": "الجمعة", "6": "السبت",
   };
   const k = d.toLowerCase().trim();
   return map[k] ?? d;

@@ -20,6 +20,8 @@ import AdminStudents from "@/pages/admin/students";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import Profile from "@/pages/profile";
+import Messaging from "@/pages/messaging";
+import BrowseCourses from "@/pages/browse-courses";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -116,6 +118,9 @@ function ProtectedLayoutRoutes() {
         <Route path="/student/courses">
           <Protected roles={["student"]}><StudentCourses /></Protected>
         </Route>
+        <Route path="/student/browse">
+          <Protected roles={["student"]}><BrowseCourses /></Protected>
+        </Route>
         <Route path="/student/courses/:id">
           <Protected roles={["student"]}><StudentCourse /></Protected>
         </Route>
@@ -129,6 +134,9 @@ function ProtectedLayoutRoutes() {
         {/* Shared */}
         <Route path="/profile">
           <Protected><Profile /></Protected>
+        </Route>
+        <Route path="/messaging">
+          <Protected><Messaging /></Protected>
         </Route>
 
         <Route><NotFound /></Route>

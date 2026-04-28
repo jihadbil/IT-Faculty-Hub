@@ -124,7 +124,7 @@ export default function StudentSchedule() {
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="w-4 h-4 opacity-70" />
-                          <span>{[entry.building, entry.room].filter(Boolean).join(" - ") || "غير محدد"}</span>
+                          <span>{[entry.building, entry.roomNumber].filter(Boolean).join(" - ") || "غير محدد"}</span>
                         </div>
                       </div>
                     </div>

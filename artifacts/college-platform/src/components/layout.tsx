@@ -16,34 +16,52 @@ import {
   Building2,
   Users,
   Crown,
+  MessageSquare,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { NotificationsBell } from "@/components/notifications-bell";
+import { useUnreadMessageCount } from "@/lib/queries";
+import { asNumber } from "@/lib/external-api";
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number };
 
-const TEACHER_NAV: NavItem[] = [
-  { href: "/", label: "لوحة القيادة", icon: LayoutDashboard },
-  { href: "/courses", label: "موادي", icon: BookOpen },
-  { href: "/files", label: "مكتبة الملفات", icon: FileVideo },
-  { href: "/schedule", label: "جدول المحاضرات", icon: CalendarDays },
-];
+function useTeacherNav(): NavItem[] {
+  const { data: unread } = useUnreadMessageCount();
+  return [
+    { href: "/", label: "لوحة القيادة", icon: LayoutDashboard },
+    { href: "/courses", label: "موادي", icon: BookOpen },
+    { href: "/files", label: "مكتبة الملفات", icon: FileVideo },
+    { href: "/schedule", label: "جدول المحاضرات", icon: CalendarDays },
+    { href: "/messaging", label: "المراسلات", icon: MessageSquare, badge: asNumber(unread?.count) },
+  ];
+}
 
-const STUDENT_NAV: NavItem[] = [
-  { href: "/student", label: "الرئيسية", icon: Home },
-  { href: "/student/courses", label: "موادي", icon: BookOpen },
-  { href: "/student/files", label: "المكتبة", icon: Library },
-  { href: "/student/schedule", label: "جدولي", icon: CalendarDays },
-];
+function useStudentNav(): NavItem[] {
+  const { data: unread } = useUnreadMessageCount();
+  return [
+    { href: "/student", label: "الرئيسية", icon: Home },
+    { href: "/student/courses", label: "موادي", icon: BookOpen },
+    { href: "/student/browse", label: "تصفّح المواد", icon: Compass },
+    { href: "/student/files", label: "المكتبة", icon: Library },
+    { href: "/student/schedule", label: "جدولي", icon: CalendarDays },
+    { href: "/messaging", label: "المراسلات", icon: MessageSquare, badge: asNumber(unread?.count) },
+  ];
+}
 
-const ADMIN_NAV: NavItem[] = [
-  { href: "/admin", label: "لوحة المدير", icon: LayoutDashboard },
-  { href: "/admin/departments", label: "الأقسام", icon: Building2 },
-  { href: "/admin/teachers", label: "الأساتذة", icon: Users },
-  { href: "/admin/students", label: "الطلاب", icon: UserRound },
-  { href: "/admin/courses", label: "المواد الدراسية", icon: BookOpen },
-  { href: "/admin/schedule", label: "جدول المحاضرات", icon: CalendarDays },
-];
+function useAdminNav(): NavItem[] {
+  const { data: unread } = useUnreadMessageCount();
+  return [
+    { href: "/admin", label: "لوحة المدير", icon: LayoutDashboard },
+    { href: "/admin/departments", label: "الأقسام", icon: Building2 },
+    { href: "/admin/teachers", label: "الأساتذة", icon: Users },
+    { href: "/admin/students", label: "الطلاب", icon: UserRound },
+    { href: "/admin/courses", label: "المواد الدراسية", icon: BookOpen },
+    { href: "/admin/schedule", label: "جدول المحاضرات", icon: CalendarDays },
+    { href: "/messaging", label: "المراسلات", icon: MessageSquare, badge: asNumber(unread?.count) },
+  ];
+}
 
 function isActiveLink(location: string, href: string, allHrefs: string[]) {
   if (location === href) return true;
@@ -59,10 +77,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
 
   const role = user?.role ?? "student";
-  const navItems = role === "admin" ? ADMIN_NAV : role === "teacher" ? TEACHER_NAV : STUDENT_NAV;
+  const teacherNav = useTeacherNav();
+  const studentNav = useStudentNav();
+  const adminNav = useAdminNav();
+  const navItems = role === "admin" ? adminNav : role === "teacher" ? teacherNav : studentNav;
   const allHrefs = navItems.map(i => i.href);
 
-  // Distinct theming per portal
   const theme =
     role === "admin"
       ? {
@@ -114,7 +134,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             >
               <item.icon className={cn("w-5 h-5 transition-transform duration-300", isActive ? "scale-110" : "group-hover:scale-110")} />
-              <span className="font-display font-bold text-base">{item.label}</span>
+              <span className="font-display font-bold text-base flex-1">{item.label}</span>
+              {item.badge && item.badge > 0 ? (
+                <span className={cn(
+                  "min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center",
+                  isActive ? "bg-rose-500 text-white" : "bg-rose-500 text-white",
+                )}>
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              ) : null}
             </span>
           </Link>
         );
@@ -161,10 +189,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md shrink-0">
             <GraduationCap className="w-7 h-7 text-white" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="font-display font-bold text-lg leading-tight truncate">كلية تقنية المعلومات</h1>
             <p className="text-white/70 text-xs">{theme.subTitle}</p>
           </div>
+          {user && <NotificationsBell />}
         </div>
 
         <div className="relative px-6 pt-4">
@@ -192,9 +221,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-white/70">{theme.portalLabel}</p>
           </div>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-xl bg-white/20">
-          {isMobileMenuOpen ? <X /> : <Menu />}
-        </button>
+        <div className="flex items-center gap-2">
+          {user && <NotificationsBell />}
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-xl bg-white/20">
+            {isMobileMenuOpen ? <X /> : <Menu />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
