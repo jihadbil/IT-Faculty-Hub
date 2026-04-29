@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Clp2u6zZnL-h-i4mhePwB"
+uri = "file://needs.md"
+type = "text"
+title = "متطلبات الـ API الناقصة (needs.md)"
