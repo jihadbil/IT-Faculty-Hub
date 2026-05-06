@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  adminApi,
   assessmentsApi,
   attendanceApi,
   coursesApi,
+  departmentsApi,
   enrollmentsApi,
   examsApi,
+  filesApi,
   liveSessionsApi,
   messagingApi,
   notificationsApi,
@@ -12,6 +15,7 @@ import {
   videosApi,
   type CourseSummaryDto,
   type CoursesQuery,
+  type FilesQuery,
   type Uuid,
 } from "@/lib/external-api";
 import { useAuth } from "@/lib/auth";
@@ -184,6 +188,53 @@ export function useUnreadNotificationCount() {
     queryKey: ["external", "notifications", "unread-count"],
     queryFn: () => notificationsApi.unreadCount(),
     refetchInterval: 30000,
+  });
+}
+
+// ───────── Files ─────────
+export function useFiles(query: FilesQuery = {}) {
+  return useQuery({
+    queryKey: ["external", "files", query],
+    queryFn: () => filesApi.list(query),
+  });
+}
+
+export function useMyFiles(query: FilesQuery = {}) {
+  return useQuery({
+    queryKey: ["external", "files", "my", query],
+    queryFn: () => filesApi.my(query),
+  });
+}
+
+export function useCourseFiles(courseId: Uuid | undefined, query: FilesQuery = {}) {
+  return useQuery({
+    queryKey: ["external", "course", courseId, "files", query],
+    queryFn: () => filesApi.listByCourse(courseId!, query),
+    enabled: !!courseId,
+  });
+}
+
+// ───────── Departments ─────────
+export function useDepartments() {
+  return useQuery({
+    queryKey: ["external", "departments"],
+    queryFn: () => departmentsApi.list(),
+  });
+}
+
+// ───────── Admin ─────────
+export function useAdminStats() {
+  return useQuery({
+    queryKey: ["external", "admin", "stats"],
+    queryFn: () => adminApi.stats(),
+  });
+}
+
+export function useStudentActivity(studentId: Uuid | undefined) {
+  return useQuery({
+    queryKey: ["external", "admin", "students", studentId, "activity"],
+    queryFn: () => adminApi.studentActivity(studentId!),
+    enabled: !!studentId,
   });
 }
 

@@ -558,6 +558,185 @@ export interface NotificationResponseDto {
   readAt?: string | null;
 }
 
+// ───────── Files ─────────
+export const FileType = {
+  Lecture: 0,
+  Assignment: 1,
+  Reference: 2,
+  Syllabus: 3,
+  Other: 4,
+} as const;
+export type FileTypeValue = (typeof FileType)[keyof typeof FileType];
+
+export const FILE_TYPE_LABEL_AR: Record<number, string> = {
+  0: "محاضرة",
+  1: "واجب",
+  2: "مرجع",
+  3: "خطة",
+  4: "أخرى",
+};
+
+export interface CourseFileResponseDto {
+  id: number;
+  courseId: Uuid;
+  courseName: string;
+  title: string;
+  description?: string | null;
+  fileType: string | number;
+  category: string;
+  fileName: string;
+  fileSize: number | string;
+  mimeType: string;
+  uploadedAt: string;
+  downloads: number | string;
+  uploadedBy: UserSummaryDto;
+  downloadUrl: string;
+}
+
+export interface UpdateCourseFileDto {
+  title?: string | null;
+  description?: string | null;
+  fileType?: FileTypeValue | null;
+}
+
+export interface FilesQuery {
+  courseId?: Uuid;
+  category?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  [key: string]: string | number | boolean | undefined | null;
+}
+
+// ───────── Departments ─────────
+export interface DepartmentResponseDto {
+  id: Uuid;
+  name: string;
+  code: string;
+  description?: string | null;
+  coursesCount: number | string;
+  teachersCount: number | string;
+  studentsCount: number | string;
+  createdAtUtc: string;
+}
+
+export interface CreateDepartmentDto {
+  name: string;
+  code: string;
+  description?: string | null;
+}
+
+export interface UpdateDepartmentDto {
+  name?: string | null;
+  code?: string | null;
+  description?: string | null;
+}
+
+// ───────── Admin ─────────
+export interface CreateTeacherDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  phoneNumber?: string | null;
+  title?: string | null;
+  bio?: string | null;
+}
+
+export interface UpdateTeacherDto {
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  title?: string | null;
+  bio?: string | null;
+}
+
+export interface CreateStudentDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  phoneNumber?: string | null;
+  studentNumber?: string | null;
+  enrollmentYear?: number | null;
+}
+
+export interface UpdateStudentDto {
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  studentNumber?: string | null;
+}
+
+export interface RecentActivityItemDto {
+  type: string;
+  description: string;
+  courseId?: Uuid | null;
+  courseName?: string | null;
+  at: string;
+}
+
+export interface StudentActivityDto {
+  studentId: Uuid;
+  fullName: string;
+  enrolledCoursesCount: number | string;
+  videosWatched: number | string;
+  filesDownloaded: number | string;
+  examsTaken: number | string;
+  averageGrade: number | string;
+  averageAttendanceRate: number | string;
+  lastLoginAt?: string | null;
+  lastActivityAt?: string | null;
+  recentActivity: RecentActivityItemDto[];
+}
+
+export interface TopCourseStatDto {
+  courseId: Uuid;
+  courseName: string;
+  courseCode: string;
+  value: number | string;
+}
+
+export interface DailyStatDto {
+  date: string;
+  count: number | string;
+}
+
+export interface AdminStatsResponseDto {
+  totalDepartments: number | string;
+  totalTeachers: number | string;
+  totalStudents: number | string;
+  activeStudents: number | string;
+  totalCourses: number | string;
+  activeCourses: number | string;
+  totalEnrollments: number | string;
+  totalVideoLectures: number | string;
+  totalVideoViews: number | string;
+  totalFiles: number | string;
+  totalExams: number | string;
+  totalLiveSessions: number | string;
+  unreadAdminNotifications: number | string;
+  topCoursesByEnrollment: TopCourseStatDto[];
+  topCoursesByViews: TopCourseStatDto[];
+  enrollmentsLast30Days: DailyStatDto[];
+  videoViewsLast30Days: DailyStatDto[];
+}
+
+// ───────── ExamSummaryDto ─────────
+export interface ExamSummaryDto {
+  id: number;
+  courseId: Uuid;
+  courseName: string;
+  title: string;
+  durationMinutes: number | string;
+  maxScore: number | string;
+  passScore: number | string;
+  startDate: string;
+  endDate: string;
+  isPublished: boolean;
+  attemptsCount: number | string;
+}
+
 // ───────── helpers ─────────
 export function asNumber(v: number | string | null | undefined, fallback = 0): number {
   if (v === null || v === undefined) return fallback;

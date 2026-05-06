@@ -1,24 +1,31 @@
 import { apiClient } from "./client";
 import type {
+  AdminStatsResponseDto,
   AssessmentResponseDto,
   AttendanceSessionResponseDto,
   AuthResponseDto,
   ConversationResponseDto,
+  CourseFileResponseDto,
   CourseResponseDto,
   CourseSummaryDto,
   CoursesQuery,
   CreateAssessmentDto,
   CreateAttendanceSessionDto,
   CreateCourseDto,
+  CreateDepartmentDto,
   CreateEnrollmentDto,
   CreateExamDto,
   CreateGradeDto,
   CreateLiveSessionDto,
   CreateScheduleDto,
+  CreateStudentDto,
+  CreateTeacherDto,
   CreateVideoLectureForm,
+  DepartmentResponseDto,
   EnrollmentResponseDto,
   ExamAttemptResponseDto,
   ExamResponseDto,
+  FilesQuery,
   GradeResponseDto,
   LiveSessionResponseDto,
   LoginRequestDto,
@@ -29,13 +36,18 @@ import type {
   RegisterRequestDto,
   ScheduleResponseDto,
   SendMessageDto,
+  StudentActivityDto,
   SubmitExamAnswersDto,
   UpdateAssessmentDto,
   UpdateCourseDto,
+  UpdateCourseFileDto,
+  UpdateDepartmentDto,
   UpdateExamDto,
   UpdateGradeDto,
   UpdateProfileDto,
   UpdateScheduleDto,
+  UpdateStudentDto,
+  UpdateTeacherDto,
   UpdateVideoLectureDto,
   UserResponseDto,
   Uuid,
@@ -261,4 +273,51 @@ export const notificationsApi = {
     apiClient.get<{ count: number }>("/api/notifications/unread-count"),
   markRead: (id: number) => apiClient.put<void>(`/api/notifications/${id}/read`),
   markAllRead: () => apiClient.put<void>("/api/notifications/read-all"),
+};
+
+// ───────── Files ─────────
+export const filesApi = {
+  list: (query: FilesQuery = {}) =>
+    apiClient.get<PagedResult<CourseFileResponseDto>>("/api/files", { query }),
+  my: (query: FilesQuery = {}) =>
+    apiClient.get<PagedResult<CourseFileResponseDto>>("/api/files/my", { query }),
+  get: (id: number) =>
+    apiClient.get<CourseFileResponseDto>(`/api/files/${id}`),
+  update: (id: number, body: UpdateCourseFileDto) =>
+    apiClient.put<CourseFileResponseDto>(`/api/files/${id}`, { body }),
+  delete: (id: number) => apiClient.del<void>(`/api/files/${id}`),
+  download: (id: number) =>
+    apiClient.get<CourseFileResponseDto>(`/api/files/${id}/download`),
+  uploadToCourse: (courseId: Uuid, form: FormData) =>
+    apiClient.post<CourseFileResponseDto>(`/api/courses/${courseId}/files`, { formData: form }),
+  listByCourse: (courseId: Uuid, query: FilesQuery = {}) =>
+    apiClient.get<PagedResult<CourseFileResponseDto>>(`/api/courses/${courseId}/files`, { query }),
+};
+
+// ───────── Departments ─────────
+export const departmentsApi = {
+  list: () => apiClient.get<DepartmentResponseDto[]>("/api/departments"),
+  get: (id: Uuid) => apiClient.get<DepartmentResponseDto>(`/api/departments/${id}`),
+  create: (body: CreateDepartmentDto) =>
+    apiClient.post<DepartmentResponseDto>("/api/departments", { body }),
+  update: (id: Uuid, body: UpdateDepartmentDto) =>
+    apiClient.put<DepartmentResponseDto>(`/api/departments/${id}`, { body }),
+  delete: (id: Uuid) => apiClient.del<void>(`/api/departments/${id}`),
+};
+
+// ───────── Admin ─────────
+export const adminApi = {
+  stats: () => apiClient.get<AdminStatsResponseDto>("/api/admin/stats"),
+  createTeacher: (body: CreateTeacherDto) =>
+    apiClient.post<UserResponseDto>("/api/admin/teachers", { body }),
+  updateTeacher: (id: Uuid, body: UpdateTeacherDto) =>
+    apiClient.put<UserResponseDto>(`/api/admin/teachers/${id}`, { body }),
+  deleteTeacher: (id: Uuid) => apiClient.del<void>(`/api/admin/teachers/${id}`),
+  createStudent: (body: CreateStudentDto) =>
+    apiClient.post<UserResponseDto>("/api/admin/students", { body }),
+  updateStudent: (id: Uuid, body: UpdateStudentDto) =>
+    apiClient.put<UserResponseDto>(`/api/admin/students/${id}`, { body }),
+  deleteStudent: (id: Uuid) => apiClient.del<void>(`/api/admin/students/${id}`),
+  studentActivity: (id: Uuid) =>
+    apiClient.get<StudentActivityDto>(`/api/admin/students/${id}/activity`),
 };

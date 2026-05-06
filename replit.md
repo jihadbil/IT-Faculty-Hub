@@ -113,22 +113,20 @@ Arabic RTL React + Vite frontend for an educational platform (students, teachers
 - Dashboards: `pages/dashboard.tsx` (teacher) and `pages/admin/dashboard.tsx` — derive stats from courses + `/api/users`.
 - Admin lists: `pages/admin/teachers.tsx`, `pages/admin/students.tsx` — read-only filtered views over `/api/users`. `pages/admin/departments.tsx` derives departments from the `department` text field on courses.
 
-#### Pages kept visible but feature-gated
-These pages render an `ApiNotice` component listing the missing endpoints they would need from the external API:
-- `pages/files.tsx` and `pages/student/files.tsx` — generic file library (only video lectures exist in the API).
-- `pages/admin/departments.tsx` — read-only list, no CRUD.
-- `pages/admin/teachers.tsx`, `pages/admin/students.tsx` — read-only with activate/deactivate via existing user endpoints.
-- `pages/admin/dashboard.tsx` — points out richer stats need a dedicated endpoint.
+#### Wired pages (Phase 3 — all 6 previously-stubbed pages now live)
+- `pages/files.tsx` — teacher file library: lists `GET /api/files`, upload via `POST /api/courses/{id}/files` (multipart), delete via `DELETE /api/files/{id}`.
+- `pages/student/files.tsx` — student file library: lists `GET /api/files/my`, filtered by course/category/search, download via `downloadUrl`.
+- `pages/admin/departments.tsx` — full CRUD via `GET/POST /api/departments`, `PUT/DELETE /api/departments/{id}`. DepartmentResponseDto.id is UUID.
+- `pages/admin/teachers.tsx` — create/edit/delete via `POST/PUT/DELETE /api/admin/teachers/{id}` in addition to existing activate/deactivate.
+- `pages/admin/students.tsx` — create/edit/delete via `POST/PUT/DELETE /api/admin/students/{id}`, plus student activity panel via `GET /api/admin/students/{id}/activity`.
+- `pages/admin/dashboard.tsx` — wired to `GET /api/admin/stats` (AdminStatsResponseDto) for real aggregate counts + top-courses tables.
 
-#### Endpoints the external API does NOT yet provide (needed for full UX)
-The following would unblock currently-stubbed pages. None of these were assumed; they are explicitly missing from the spec.
+#### New types added (Phase 3)
+`CourseFileResponseDto`, `UpdateCourseFileDto`, `FilesQuery` (with index signature for query params), `DepartmentResponseDto` (id: UUID), `CreateDepartmentDto`, `UpdateDepartmentDto`, `CreateTeacherDto`, `UpdateTeacherDto`, `CreateStudentDto`, `UpdateStudentDto`, `StudentActivityDto`, `RecentActivityItemDto`, `AdminStatsResponseDto`, `TopCourseStatDto`, `DailyStatDto`, `ExamSummaryDto`, `FILE_TYPE_LABEL_AR`, `FileType` enum.
 
-- **Files / library**: `GET /api/files`, `GET /api/courses/{courseId}/files`, `POST /api/courses/{courseId}/files`, `DELETE /api/courses/{courseId}/files/{fileId}`, `GET /api/files/{id}/download`.
-- **Departments**: `GET /api/departments`, `POST /api/departments`, `PUT /api/departments/{id}`, `DELETE /api/departments/{id}` (currently `department` is a free-text field on each course).
-- **Admin user management beyond activate/deactivate**: `POST /api/admin/teachers`, `PUT /api/admin/teachers/{id}`, `DELETE /api/admin/teachers/{id}`, `POST /api/users/{id}/roles`, `GET /api/admin/students`, `GET /api/admin/students/{id}/activity`.
-- **Aggregate stats**: `GET /api/admin/stats` (totals across courses, videos, views, etc.) — currently computed client-side.
-- **Schedule type/category** (lecture/lab/tutorial) — `ScheduleResponseDto` has no `type` field; UI omits it.
-- **Course color/banner** — generated deterministically client-side via a hash of the course UUID (`colorForCourse` in `src/lib/queries.ts`); the API returns no styling metadata.
+#### New API groups added (Phase 3)
+`filesApi`, `departmentsApi`, `adminApi` — all in `src/lib/external-api/endpoints.ts`.
+New query hooks: `useFiles`, `useMyFiles`, `useCourseFiles`, `useDepartments`, `useAdminStats`, `useStudentActivity` — in `src/lib/queries.ts`.
 
 #### Notes on the API shape (gotchas)
 - Numeric fields in DTOs (`credits`, `enrolledStudentsCount`, `videoLecturesCount`, `videoOrder`, `viewCount`, `durationSeconds`, paged-result counts) may be returned as **string or number** by the .NET serializer. Always coerce via the `asNumber()` helper from `@/lib/external-api`.
