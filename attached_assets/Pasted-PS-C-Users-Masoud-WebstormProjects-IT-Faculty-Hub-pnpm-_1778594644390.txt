@@ -1,0 +1,41 @@
+PS C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub> pnpm build
+
+> workspace@0.0.0 build C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub
+> pnpm run typecheck && pnpm -r --if-present run build
+
+
+> workspace@0.0.0 typecheck C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub
+> pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+
+
+> workspace@0.0.0 typecheck:libs C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub
+> tsc --build
+
+Scope: 4 of 9 workspace projects
+artifacts/api-server typecheck$ tsc -p tsconfig.json --noEmit
+└─ Done in 3.3s
+artifacts/college-platform typecheck$ tsc -p tsconfig.json --noEmit
+└─ Done in 8.9s
+artifacts/mockup-sandbox typecheck$ tsc -p tsconfig.json --noEmit
+└─ Done in 6.6s
+scripts typecheck$ tsc -p tsconfig.json --noEmit
+└─ Done in 1.3s
+Scope: 8 of 9 workspace projects
+artifacts/mockup-sandbox build$ vite build
+│ failed to load config from C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub\artifacts\mockup-sandbox\vite.config.ts
+│ error during build:
+│ Error: PORT environment variable is required but was not provided.
+│     at file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/artifacts/mockup-sandbox/node_modules/.vite-temp/vite.config.ts.timestamp-1778594578004-afc33347e7e25.mjs:145:9
+│     at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+│     at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+│     at async loadConfigFromBundledFile (file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/node_modules/.pnpm/vite@7.3.1_@types+node@25.3_847d3f1dfd8a5a4dca3b40dafc2c9d32/node_modules/vite/dist/node/chunks/config.js:35…
+│     at async bundleAndLoadConfigFile (file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/node_modules/.pnpm/vite@7.3.1_@types+node@25.3_847d3f1dfd8a5a4dca3b40dafc2c9d32/node_modules/vite/dist/node/chunks/config.js:3579…
+│     at async loadConfigFromFile (file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/node_modules/.pnpm/vite@7.3.1_@types+node@25.3_847d3f1dfd8a5a4dca3b40dafc2c9d32/node_modules/vite/dist/node/chunks/config.js:35764:42)
+│     at async resolveConfig (file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/node_modules/.pnpm/vite@7.3.1_@types+node@25.3_847d3f1dfd8a5a4dca3b40dafc2c9d32/node_modules/vite/dist/node/chunks/config.js:35413:22)
+│     at async createBuilder (file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/node_modules/.pnpm/vite@7.3.1_@types+node@25.3_847d3f1dfd8a5a4dca3b40dafc2c9d32/node_modules/vite/dist/node/chunks/config.js:33875:19)
+│     at async CAC.<anonymous> (file:///C:/Users/Masoud/WebstormProjects/IT-Faculty-Hub/node_modules/.pnpm/vite@7.3.1_@types+node@25.3_847d3f1dfd8a5a4dca3b40dafc2c9d32/node_modules/vite/dist/node/cli.js:629:10)
+└─ Failed in 875ms at C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub\artifacts\mockup-sandbox
+C:\Users\Masoud\WebstormProjects\IT-Faculty-Hub\artifacts\mockup-sandbox:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/mockup-sandbox@2.0.0 build: `vite build`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
