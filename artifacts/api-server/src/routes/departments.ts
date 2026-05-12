@@ -48,7 +48,7 @@ router.post("/departments", requireAdmin, async (req, res) => {
 
 router.put("/departments/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "معرف غير صالح" });
     const name = asString(req.body?.name);
     const description = asString(req.body?.description);
@@ -68,7 +68,7 @@ router.put("/departments/:id", requireAdmin, async (req, res) => {
 
 router.delete("/departments/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "معرف غير صالح" });
     await db.delete(departmentsTable).where(eq(departmentsTable.id, id));
     res.json({ success: true });

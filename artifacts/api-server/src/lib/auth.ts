@@ -36,11 +36,6 @@ declare module "express-session" {
   }
 }
 
-declare module "express-serve-static-core" {
-  interface Request {
-    user?: User;
-  }
-}
 
 export async function loadUser(userId: number): Promise<User | null> {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));

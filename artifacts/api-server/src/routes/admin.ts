@@ -88,7 +88,7 @@ router.post("/admin/teachers", requireAdmin, async (req, res) => {
 // Update teacher (name, department, optional new password)
 router.put("/admin/teachers/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "معرف غير صالح" });
     const fullName = asString(req.body?.fullName);
     const departmentId = asInt(req.body?.departmentId);
@@ -116,7 +116,7 @@ router.put("/admin/teachers/:id", requireAdmin, async (req, res) => {
 
 router.delete("/admin/teachers/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "معرف غير صالح" });
     if (req.user!.id === id) return res.status(400).json({ message: "لا يمكن حذف حسابك" });
     const result = await db

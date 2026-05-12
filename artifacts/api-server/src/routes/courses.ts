@@ -56,7 +56,7 @@ router.post("/courses", requireAdmin, async (req, res) => {
 
 router.get("/courses/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const [course] = await db.select().from(coursesTable).where(eq(coursesTable.id, id));
     if (!course) return res.status(404).json({ message: "Course not found" });
@@ -69,7 +69,7 @@ router.get("/courses/:id", async (req, res) => {
 
 router.put("/courses/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const parsed = CreateCourseBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
@@ -86,7 +86,7 @@ router.put("/courses/:id", requireAdmin, async (req, res) => {
 
 router.delete("/courses/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     await db.delete(coursesTable).where(eq(coursesTable.id, id));
     res.json({ message: "Course deleted", success: true });

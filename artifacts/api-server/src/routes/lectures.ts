@@ -65,7 +65,7 @@ router.post("/lectures", requireTeacher, async (req, res) => {
 
 router.get("/lectures/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const [lecture] = await db
       .select({
@@ -102,7 +102,7 @@ router.get("/lectures/:id", async (req, res) => {
 
 router.put("/lectures/:id", requireTeacher, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const parsed = CreateLectureBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
@@ -120,7 +120,7 @@ router.put("/lectures/:id", requireTeacher, async (req, res) => {
 
 router.delete("/lectures/:id", requireTeacher, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const [existing] = await db.select().from(lecturesTable).where(eq(lecturesTable.id, id));
     if (!existing) return res.status(404).json({ message: "Lecture not found" });

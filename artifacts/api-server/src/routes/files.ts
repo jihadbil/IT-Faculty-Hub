@@ -144,7 +144,7 @@ router.post("/files/upload", requireTeacher, upload.single("file"), async (req, 
 
 router.delete("/files/:id", requireTeacher, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const [file] = await db.select().from(filesTable).where(eq(filesTable.id, id));
     if (!file) return res.status(404).json({ message: "File not found" });

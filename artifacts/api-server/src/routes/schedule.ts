@@ -68,7 +68,7 @@ router.post("/schedule", requireAdmin, async (req, res) => {
 
 router.put("/schedule/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const parsed = CreateScheduleEntryBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
@@ -83,7 +83,7 @@ router.put("/schedule/:id", requireAdmin, async (req, res) => {
 
 router.delete("/schedule/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     await db.delete(scheduleTable).where(eq(scheduleTable.id, id));
     res.json({ message: "Schedule entry deleted", success: true });
