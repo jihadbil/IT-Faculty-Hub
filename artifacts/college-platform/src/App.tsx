@@ -13,6 +13,10 @@ import StudentCourses from "@/pages/student/courses";
 import StudentCourse from "@/pages/student/course";
 import StudentFiles from "@/pages/student/files";
 import StudentSchedule from "@/pages/student/schedule";
+import StudentExams from "@/pages/student/exams";
+import StudentExamTake from "@/pages/student/exam-take";
+import ExamBuilder from "@/pages/exams/builder";
+import ExamDetail from "@/pages/exams/detail";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminDepartments from "@/pages/admin/departments";
 import AdminTeachers from "@/pages/admin/teachers";
@@ -87,6 +91,12 @@ function ProtectedLayoutRoutes() {
         <Route path="/admin/courses">
           <Protected roles={["admin"]}><Courses /></Protected>
         </Route>
+        <Route path="/admin/courses/:courseId/exams/new">
+          <Protected roles={["admin"]}><ExamBuilder /></Protected>
+        </Route>
+        <Route path="/admin/courses/:courseId/exams/:examId">
+          <Protected roles={["admin"]}><ExamDetail /></Protected>
+        </Route>
         <Route path="/admin/courses/:id">
           <Protected roles={["admin"]}><CourseDetails /></Protected>
         </Route>
@@ -100,6 +110,12 @@ function ProtectedLayoutRoutes() {
         </Route>
         <Route path="/courses">
           <Protected roles={["teacher"]}><Courses /></Protected>
+        </Route>
+        <Route path="/courses/:courseId/exams/new">
+          <Protected roles={["teacher"]}><ExamBuilder /></Protected>
+        </Route>
+        <Route path="/courses/:courseId/exams/:examId">
+          <Protected roles={["teacher"]}><ExamDetail /></Protected>
         </Route>
         <Route path="/courses/:id">
           <Protected roles={["teacher"]}><CourseDetails /></Protected>
@@ -120,6 +136,12 @@ function ProtectedLayoutRoutes() {
         </Route>
         <Route path="/student/browse">
           <Protected roles={["student"]}><BrowseCourses /></Protected>
+        </Route>
+        <Route path="/student/exams">
+          <Protected roles={["student"]}><StudentExams /></Protected>
+        </Route>
+        <Route path="/student/courses/:courseId/exams/:examId">
+          <Protected roles={["student"]}><StudentExamTake /></Protected>
         </Route>
         <Route path="/student/courses/:id">
           <Protected roles={["student"]}><StudentCourse /></Protected>

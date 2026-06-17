@@ -1,10 +1,16 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import {
   AlertCircle,
   CalendarCheck,
+  ChevronLeft,
   ClipboardCheck,
   ClipboardList,
+  Clock,
+  ExternalLink,
+  Globe,
   Loader2,
   PenLine,
   Play,
@@ -12,6 +18,7 @@ import {
   Power,
   RadioTower,
   Save,
+  Target,
   Trash2,
   TrendingUp,
   X,
@@ -585,6 +592,7 @@ function statusToNumber(s: string | number): number {
 // EXAMS TAB
 // ────────────────────────────────────────────────────────────
 export function ExamsTab({ courseId, canEdit, studentMode }: TabProps) {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const { data: items = [], isLoading, error } = useExams(courseId);
 
@@ -602,6 +610,9 @@ export function ExamsTab({ courseId, canEdit, studentMode }: TabProps) {
   if (error) return <ErrorPlaceholder error={error as Error} />;
 
   const visible = studentMode ? items.filter((e) => e.isPublished) : items;
+  const isAdmin = user?.role === "admin";
+  const prefix = isAdmin ? "/admin" : "";
+  const builderPath = `${prefix}/courses/${courseId}/exams/new`;
 
   return (
     <div className="space-y-4">
@@ -610,18 +621,16 @@ export function ExamsTab({ courseId, canEdit, studentMode }: TabProps) {
           <ClipboardList className="w-6 h-6 text-primary" /> الامتحانات
         </h2>
         {canEdit && (
-          <CreateExamButton courseId={courseId} />
+          <Link href={builderPath}>
+            <Button size="sm" className="gap-2">
+              <Plus className="w-4 h-4" /> امتحان جديد
+            </Button>
+          </Link>
         )}
       </div>
 
-      {canEdit && (
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          إضافة امتحان جديد تحتاج إنشاء أسئلته بشكل برمجي عبر الـ API. الواجهة هنا تتيح إنشاء امتحان أساسي بعنوان فقط، ثم تستطيع إضافة الأسئلة لاحقاً.
-        </div>
-      )}
-
       {visible.length === 0 ? (
-        <EmptyPlaceholder icon={ClipboardList} text="لا توجد امتحانات منشورة." />
+        <EmptyPlaceholder icon={ClipboardList} text={canEdit ? "لا توجد امتحانات بعد. أنشئ امتحاناً جديداً مع أسئلة كاملة." : "لا توجد امتحانات منشورة."} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {visible.map((ex) => (
@@ -631,6 +640,7 @@ export function ExamsTab({ courseId, canEdit, studentMode }: TabProps) {
               courseId={courseId}
               canEdit={canEdit}
               studentMode={!!studentMode}
+              prefix={prefix}
               onDelete={(id) => { if (confirm("حذف الامتحان؟")) remove.mutate(id); }}
               onPublish={(id) => publish.mutate(id)}
               isPublishing={publish.isPending}
@@ -642,92 +652,12 @@ export function ExamsTab({ courseId, canEdit, studentMode }: TabProps) {
   );
 }
 
-function CreateExamButton({ courseId }: { courseId: Uuid }) {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState(60);
-  const [pass, setPass] = useState(50);
-  const [start, setStart] = useState(() => new Date().toISOString().slice(0, 16));
-  const [end, setEnd] = useState(() => new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16));
-
-  const create = useMutation({
-    mutationFn: () =>
-      examsApi.create(courseId, {
-        courseId,
-        title,
-        durationMinutes: duration,
-        passScore: pass,
-        startDate: new Date(start).toISOString(),
-        endDate: new Date(end).toISOString(),
-        maxAttempts: 1,
-        shuffleQuestions: false,
-        shuffleOptions: false,
-        showResultAfterSubmit: true,
-        questions: [],
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["external", "course", courseId, "exams"] });
-      setOpen(false);
-      setTitle("");
-    },
-  });
-
-  return (
-    <>
-      <Button size="sm" className="gap-2" onClick={() => setOpen(true)}>
-        <Plus className="w-4 h-4" /> امتحان جديد
-      </Button>
-      {open && (
-        <Modal isOpen onClose={() => setOpen(false)} title="إنشاء امتحان">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              create.mutate();
-            }}
-            className="space-y-4"
-          >
-            <div>
-              <label className="block text-sm font-bold mb-2">عنوان الامتحان</label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-bold mb-2">المدة (دقيقة)</label>
-                <Input type="number" min={1} value={duration} onChange={(e) => setDuration(Number(e.target.value))} required />
-              </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">درجة النجاح</label>
-                <Input type="number" min={0} value={pass} onChange={(e) => setPass(Number(e.target.value))} required />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-bold mb-2">يبدأ في</label>
-                <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">ينتهي في</label>
-                <Input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} required />
-              </div>
-            </div>
-            {create.isError && <ErrorBox error={create.error as Error} />}
-            <div className="pt-3 flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>إلغاء</Button>
-              <Button type="submit" isLoading={create.isPending}>إنشاء</Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </>
-  );
-}
-
 function ExamCard({
   exam,
   courseId,
   canEdit,
   studentMode,
+  prefix,
   onDelete,
   onPublish,
   isPublishing,
@@ -736,192 +666,92 @@ function ExamCard({
   courseId: Uuid;
   canEdit: boolean;
   studentMode: boolean;
+  prefix: string;
   onDelete: (id: number) => void;
   onPublish: (id: number) => void;
   isPublishing: boolean;
 }) {
-  const [taking, setTaking] = useState(false);
   const { data: myAttempts = [] } = useMyExamAttempts(studentMode ? courseId : undefined, studentMode ? exam.id : null);
-  const lastAttempt = myAttempts[myAttempts.length - 1];
+  const submittedAttempts = myAttempts.filter((a) => a.status !== "InProgress");
+  const bestAttempt = submittedAttempts.sort((a, b) => asNumber(b.score) - asNumber(a.score))[0];
   const now = Date.now();
   const startsAt = new Date(exam.startDate).getTime();
   const endsAt = new Date(exam.endDate).getTime();
   const isOpen = now >= startsAt && now <= endsAt;
+  const detailPath = studentMode
+    ? `/student/courses/${courseId}/exams/${exam.id}`
+    : `${prefix}/courses/${courseId}/exams/${exam.id}`;
 
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-2 mb-2">
+    <Card className="p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="flex flex-wrap gap-2">
           {exam.isPublished ? (
             <Badge variant="success">منشور</Badge>
           ) : (
             <Badge variant="warning">مسودة</Badge>
           )}
-          <Badge variant="outline">{asNumber(exam.durationMinutes)} د</Badge>
-          <Badge variant="outline">{exam.questions?.length ?? 0} سؤال</Badge>
+          {isOpen && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">● متاح الآن</Badge>}
         </div>
         {canEdit && (
-          <button onClick={() => onDelete(exam.id)} className="text-destructive hover:bg-destructive/10 p-1 rounded-md">
+          <button onClick={() => onDelete(exam.id)} className="text-destructive hover:bg-destructive/10 p-1 rounded-md shrink-0">
             <Trash2 className="w-4 h-4" />
           </button>
         )}
       </div>
-      <h3 className="font-bold text-lg break-words">{exam.title}</h3>
-      {exam.description && <p className="text-sm text-muted-foreground mt-1 break-words">{exam.description}</p>}
-      <p className="text-xs text-muted-foreground mt-2" dir="ltr">
-        {new Date(exam.startDate).toLocaleString("ar")} → {new Date(exam.endDate).toLocaleString("ar")}
-      </p>
 
-      <div className="mt-4 flex gap-2 flex-wrap">
+      <div>
+        <h3 className="font-bold text-base break-words">{exam.title}</h3>
+        {exam.description && <p className="text-sm text-muted-foreground mt-0.5 break-words line-clamp-2">{exam.description}</p>}
+      </div>
+
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{asNumber(exam.durationMinutes)} دقيقة</span>
+        <span className="flex items-center gap-1"><Target className="w-3.5 h-3.5" />النجاح: {asNumber(exam.passScore)}</span>
+        <span className="flex items-center gap-1"><ClipboardList className="w-3.5 h-3.5" />{exam.questions?.length ?? 0} سؤال</span>
+      </div>
+
+      <div className="flex gap-2 flex-wrap mt-auto pt-1">
         {canEdit && !exam.isPublished && (
-          <Button size="sm" variant="outline" onClick={() => onPublish(exam.id)} disabled={isPublishing}>
-            نشر
+          <Button size="sm" variant="outline" onClick={() => onPublish(exam.id)} disabled={isPublishing} className="gap-1">
+            <Globe className="w-3.5 h-3.5" /> نشر
           </Button>
+        )}
+        {canEdit && (
+          <Link href={detailPath}>
+            <Button size="sm" variant="outline" className="gap-1">
+              <ExternalLink className="w-3.5 h-3.5" /> التفاصيل والأسئلة
+            </Button>
+          </Link>
         )}
         {studentMode && exam.isPublished && (
           <>
-            {lastAttempt?.submittedAt ? (
-              <Badge variant="success">
-                درجتي: {asNumber(lastAttempt.score)} / {asNumber(lastAttempt.maxScore)}
-              </Badge>
+            {bestAttempt ? (
+              <div className="flex items-center gap-2 flex-1">
+                <Badge variant={bestAttempt.isPassed ? "success" : "warning"} className="text-xs">
+                  {bestAttempt.isPassed ? "ناجح" : "راسب"} — {asNumber(bestAttempt.score)} / {asNumber(bestAttempt.maxScore)}
+                </Badge>
+                <Link href={detailPath} className="mr-auto">
+                  <span className="text-xs text-primary font-bold flex items-center gap-1 hover:underline">
+                    عرض <ChevronLeft className="w-3 h-3" />
+                  </span>
+                </Link>
+              </div>
             ) : isOpen ? (
-              <Button size="sm" onClick={() => setTaking(true)} className="gap-1">
-                <Play className="w-4 h-4" /> ابدأ الامتحان
-              </Button>
+              <Link href={detailPath}>
+                <Button size="sm" className="gap-1 bg-emerald-600 hover:bg-emerald-700">
+                  <Play className="w-3.5 h-3.5" /> ابدأ الامتحان
+                </Button>
+              </Link>
             ) : (
-              <Badge variant="outline">{now < startsAt ? "لم يبدأ بعد" : "انتهى الوقت"}</Badge>
+              <Badge variant="outline" className="text-xs">
+                {now < startsAt ? "لم يبدأ بعد" : "انتهى الوقت"}
+              </Badge>
             )}
           </>
         )}
       </div>
-
-      {taking && (
-        <TakeExamModal
-          courseId={courseId}
-          examId={exam.id}
-          onClose={() => setTaking(false)}
-        />
-      )}
     </Card>
-  );
-}
-
-function TakeExamModal({
-  courseId,
-  examId,
-  onClose,
-}: {
-  courseId: Uuid;
-  examId: number;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const [attempt, setAttempt] = useState<ExamAttemptResponseDto | null>(null);
-  const [exam, setExam] = useState<ExamResponseDto | null>(null);
-  const [answers, setAnswers] = useState<Record<number, { selectedOptionId?: number; textAnswer?: string }>>({});
-  const [result, setResult] = useState<ExamAttemptResponseDto | null>(null);
-
-  const start = useMutation({
-    mutationFn: async () => {
-      const a = await examsApi.startAttempt(courseId, examId);
-      const e = await examsApi.get(courseId, examId);
-      return { a, e };
-    },
-    onSuccess: ({ a, e }) => {
-      setAttempt(a);
-      setExam(e);
-    },
-  });
-
-  const submit = useMutation({
-    mutationFn: () =>
-      examsApi.submitAttempt(courseId, examId, {
-        attemptId: attempt!.id,
-        answers: Object.entries(answers).map(([qid, a]) => ({
-          questionId: Number(qid),
-          selectedOptionId: a.selectedOptionId ?? null,
-          textAnswer: a.textAnswer ?? null,
-        })),
-      }),
-    onSuccess: (r) => {
-      setResult(r);
-      qc.invalidateQueries({ queryKey: ["external", "course", courseId, "exam", examId, "my-attempts"] });
-    },
-  });
-
-  // Auto-start on open
-  React.useEffect(() => {
-    if (!attempt && !start.isPending) start.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <Modal isOpen onClose={onClose} title={exam?.title ?? "جاري التحميل…"}>
-      {start.isPending && (
-        <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
-      )}
-      {start.isError && <ErrorBox error={start.error as Error} />}
-
-      {result ? (
-        <div className="text-center py-6">
-          <div className="text-5xl font-bold text-primary mb-2">
-            {asNumber(result.score)} / {asNumber(result.maxScore)}
-          </div>
-          <p className={result.isPassed ? "text-emerald-600 font-bold" : "text-rose-600 font-bold"}>
-            {result.isPassed ? "ناجح ✓" : "راسب"}
-          </p>
-          <Button onClick={onClose} className="mt-6">إغلاق</Button>
-        </div>
-      ) : exam && attempt ? (
-        <div className="space-y-5 max-h-[60vh] overflow-y-auto">
-          {exam.questions?.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6">لم يتم إضافة أسئلة لهذا الامتحان بعد.</p>
-          ) : (
-            exam.questions.map((q, idx) => (
-              <div key={q.id} className="p-4 rounded-xl border border-border">
-                <p className="font-bold mb-3">
-                  {idx + 1}. {q.questionText}{" "}
-                  <span className="text-xs text-muted-foreground">({asNumber(q.points)} نقطة)</span>
-                </p>
-                {q.options?.length > 0 ? (
-                  <div className="space-y-2">
-                    {q.options.map((o) => (
-                      <label key={o.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/40 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`q-${q.id}`}
-                          checked={answers[q.id]?.selectedOptionId === o.id}
-                          onChange={() =>
-                            setAnswers((p) => ({ ...p, [q.id]: { selectedOptionId: o.id } }))
-                          }
-                        />
-                        <span className="text-sm break-words">{o.optionText}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <Input
-                    value={answers[q.id]?.textAnswer ?? ""}
-                    onChange={(e) =>
-                      setAnswers((p) => ({ ...p, [q.id]: { textAnswer: e.target.value } }))
-                    }
-                    placeholder="اكتب إجابتك…"
-                  />
-                )}
-              </div>
-            ))
-          )}
-
-          <div className="pt-4 border-t border-border flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>إلغاء</Button>
-            <Button type="button" isLoading={submit.isPending} onClick={() => submit.mutate()}>
-              تسليم الامتحان
-            </Button>
-          </div>
-          {submit.isError && <ErrorBox error={submit.error as Error} />}
-        </div>
-      ) : null}
-    </Modal>
   );
 }
 

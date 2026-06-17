@@ -18,6 +18,7 @@ import {
   Crown,
   MessageSquare,
   Compass,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -44,6 +45,7 @@ function useStudentNav(): NavItem[] {
     { href: "/student", label: "الرئيسية", icon: Home },
     { href: "/student/courses", label: "موادي", icon: BookOpen },
     { href: "/student/browse", label: "تصفّح المواد", icon: Compass },
+    { href: "/student/exams", label: "امتحاناتي", icon: ClipboardList },
     { href: "/student/files", label: "المكتبة", icon: Library },
     { href: "/student/schedule", label: "جدولي", icon: CalendarDays },
     { href: "/messaging", label: "المراسلات", icon: MessageSquare, badge: asNumber(unread?.count) },

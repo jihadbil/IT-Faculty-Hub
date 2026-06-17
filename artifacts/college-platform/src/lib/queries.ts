@@ -119,10 +119,26 @@ export function useExams(courseId: Uuid | undefined) {
   });
 }
 
+export function useExam(courseId: Uuid | undefined, examId: number | null) {
+  return useQuery({
+    queryKey: ["external", "course", courseId, "exam", examId],
+    queryFn: () => examsApi.get(courseId!, examId!),
+    enabled: !!courseId && !!examId,
+  });
+}
+
 export function useMyExamAttempts(courseId: Uuid | undefined, examId: number | null) {
   return useQuery({
     queryKey: ["external", "course", courseId, "exam", examId, "my-attempts"],
     queryFn: () => examsApi.myAttempts(courseId!, examId!),
+    enabled: !!courseId && !!examId,
+  });
+}
+
+export function useExamAttempts(courseId: Uuid | undefined, examId: number | null) {
+  return useQuery({
+    queryKey: ["external", "course", courseId, "exam", examId, "attempts"],
+    queryFn: () => examsApi.listAttempts(courseId!, examId!),
     enabled: !!courseId && !!examId,
   });
 }
