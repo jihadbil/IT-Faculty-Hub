@@ -69,8 +69,12 @@ export default function StudentExamTake() {
   const submitAttempt = useMutation({
     mutationFn: () =>
       examsApi.submitAttempt(courseId!, examId!, {
-        attemptId: currentAttempt!.id,
-        answers: Object.values(answers),
+        attemptId: Number(currentAttempt!.id),
+        answers: Object.values(answers).map((a) => ({
+          questionId: Number(a.questionId),
+          selectedOptionId: a.selectedOptionId != null ? Number(a.selectedOptionId) : null,
+          textAnswer: a.textAnswer ?? null,
+        })),
       }),
     onSuccess: (result) => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -97,9 +101,16 @@ export default function StudentExamTake() {
   }, [phase, timeLeft > 0 && phase === "taking"]);
 
   const setAnswer = useCallback((questionId: number, patch: Partial<ExamAnswerItemDto>) => {
+    const qid = Number(questionId);
     setAnswers((prev) => ({
       ...prev,
-      [questionId]: { ...prev[questionId], questionId, ...patch },
+      [qid]: {
+        ...prev[qid],
+        questionId: qid,
+        ...patch,
+        selectedOptionId: patch.selectedOptionId != null ? Number(patch.selectedOptionId) : (patch.selectedOptionId === null ? null : prev[qid]?.selectedOptionId ?? null),
+        textAnswer: patch.textAnswer !== undefined ? (patch.textAnswer ?? null) : (prev[qid]?.textAnswer ?? null),
+      },
     }));
   }, []);
 
@@ -280,12 +291,13 @@ export default function StudentExamTake() {
               {(normalizeQuestionType(q.questionType) === 0 || normalizeQuestionType(q.questionType) === 1) && q.options && q.options.length > 0 && (
                 <div className="space-y-2 pr-11">
                   {q.options.map((opt) => {
-                    const selected = myAnswer?.selectedOptionId === opt.id;
+                    const optId = Number(opt.id);
+                    const selected = myAnswer?.selectedOptionId === optId;
                     return (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setAnswer(q.id, { selectedOptionId: opt.id, textAnswer: undefined })}
+                        onClick={() => setAnswer(Number(q.id), { selectedOptionId: optId, textAnswer: null })}
                         className={cn(
                           "w-full text-right px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium",
                           selected
@@ -309,7 +321,7 @@ export default function StudentExamTake() {
                 <div className="pr-11">
                   <textarea
                     value={myAnswer?.textAnswer ?? ""}
-                    onChange={(e) => setAnswer(q.id, { textAnswer: e.target.value, selectedOptionId: undefined })}
+                    onChange={(e) => setAnswer(Number(q.id), { textAnswer: e.target.value, selectedOptionId: null })}
                     rows={4}
                     placeholder="اكتب إجابتك هنا..."
                     className="w-full border-2 border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary resize-none transition-colors"
