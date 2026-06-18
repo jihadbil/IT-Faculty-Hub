@@ -102,7 +102,7 @@ export default function CourseDetails() {
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-3 break-words">{course.courseName}</h1>
             <p className="text-white/80 max-w-2xl text-lg break-words">{course.description || "لا يوجد وصف"}</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm text-white/80">
-              <span>📍 {course.department}</span>
+              <span>📍 {course.departmentName || course.department || "—"}</span>
               <span>👤 {course.professor?.fullName || "—"}</span>
               <span dir="ltr">📅 {course.semester} • {course.academicYear}</span>
             </div>

@@ -8,14 +8,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/lib/auth";
-import { coursesApi, type CourseSummaryDto, asNumber } from "@/lib/external-api";
-import { useCoursesForRole, useUsers, colorForCourse } from "@/lib/queries";
+import { coursesApi, type CourseSummaryDto, asNumber, type Uuid } from "@/lib/external-api";
+import { useCoursesForRole, useUsers, colorForCourse, useDepartments } from "@/lib/queries";
 
 const courseSchema = z.object({
   courseName: z.string().min(2, "اسم المادة مطلوب"),
   courseCode: z.string().min(2, "رمز المادة مطلوب").max(20),
   description: z.string().max(1000).optional(),
-  department: z.string().min(1, "القسم مطلوب").max(100),
+  departmentId: z.string().min(1, "القسم مطلوب"),
   credits: z.coerce.number().min(1).max(6),
   semester: z.coerce.number().min(0).max(2),
   academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
@@ -28,6 +28,10 @@ function thisAcademicYear(): string {
   return `${y}-${y + 1}`;
 }
 
+function deptLabel(c: CourseSummaryDto): string {
+  return c.departmentName || c.department || "—";
+}
+
 export default function Courses() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -35,6 +39,7 @@ export default function Courses() {
 
   const { data: courses = [], isLoading, error } = useCoursesForRole();
   const { data: users = [] } = useUsers();
+  const { data: departments = [] } = useDepartments();
 
   const teachers = useMemo(
     () =>
@@ -45,19 +50,13 @@ export default function Courses() {
     [users],
   );
 
-  const departments = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of courses) if (c.department) set.add(c.department);
-    return Array.from(set);
-  }, [courses]);
-
   const createCourse = useMutation({
     mutationFn: (data: CourseFormValues) =>
       coursesApi.create({
         courseCode: data.courseCode,
         courseName: data.courseName,
         description: data.description || undefined,
-        department: data.department,
+        departmentId: data.departmentId as Uuid,
         credits: data.credits,
         semester: data.semester,
         academicYear: data.academicYear,
@@ -94,7 +93,9 @@ export default function Courses() {
     if (confirm("هل أنت متأكد من حذف هذه المادة؟")) deleteCourse.mutate(id);
   };
 
-  const filtered = filterDept === "all" ? courses : courses.filter((c) => c.department === filterDept);
+  const filtered = filterDept === "all"
+    ? courses
+    : courses.filter((c) => c.departmentId === filterDept || c.department === filterDept);
 
   return (
     <div className="space-y-8">
@@ -109,11 +110,11 @@ export default function Courses() {
           <Select
             value={filterDept}
             onChange={(e) => setFilterDept(e.target.value)}
-            className="w-48 bg-muted/50"
+            className="w-52 bg-muted/50"
           >
             <option value="all">كل الأقسام</option>
             {departments.map((d) => (
-              <option key={d} value={d}>{d}</option>
+              <option key={d.id as string} value={d.id as string}>{d.name}</option>
             ))}
           </Select>
           {isAdmin && (
@@ -186,12 +187,14 @@ export default function Courses() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-2">القسم</label>
-              <Input {...register("department")} placeholder="مثال: قسم الحاسوب" list="departments-suggest" />
-              <datalist id="departments-suggest">
-                {departments.map((d) => <option key={d} value={d} />)}
-              </datalist>
-              {errors.department && <span className="text-xs text-destructive">{errors.department.message}</span>}
+              <label className="block text-sm font-bold mb-2">القسم الأكاديمي</label>
+              <Select {...register("departmentId")}>
+                <option value="">— اختر القسم —</option>
+                {departments.map((d) => (
+                  <option key={d.id as string} value={d.id as string}>{d.name}</option>
+                ))}
+              </Select>
+              {errors.departmentId && <span className="text-xs text-destructive">{errors.departmentId.message}</span>}
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">السنة الأكاديمية</label>
@@ -248,6 +251,7 @@ function CourseCard({
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) {
   const color = colorForCourse(course.id);
+  const deptDisplay = course.departmentName || course.department || "";
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -274,7 +278,7 @@ function CourseCard({
             <h3 className="text-2xl font-display font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
               {course.courseName}
             </h3>
-            <p className="text-muted-foreground text-sm line-clamp-2 mb-4 flex-1">{course.department}</p>
+            <p className="text-muted-foreground text-sm line-clamp-2 mb-4 flex-1">{deptDisplay}</p>
             <div className="grid grid-cols-2 gap-4 mt-auto pt-6 border-t border-border/50">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="w-4 h-4 text-primary" />

@@ -15,9 +15,12 @@ export default function StudentCourses() {
   const { data: courses = [], isLoading, error } = useCoursesForRole();
 
   const departments = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of courses) if (c.department) set.add(c.department);
-    return Array.from(set);
+    const map = new Map<string, string>();
+    for (const c of courses) {
+      if (c.departmentId && c.departmentName) map.set(c.departmentId, c.departmentName);
+      else if (c.department) map.set(c.department, c.department);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [courses]);
 
   const semesters = useMemo(() => {
@@ -27,7 +30,7 @@ export default function StudentCourses() {
   }, [courses]);
 
   const filtered = courses.filter((c) => {
-    if (department && c.department !== department) return false;
+    if (department && c.departmentId !== department && c.department !== department) return false;
     if (semester && c.semester !== semester) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -63,7 +66,7 @@ export default function StudentCourses() {
           </div>
           <Select value={department} onChange={(e) => setDepartment(e.target.value)}>
             <option value="">كل الأقسام</option>
-            {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </Select>
           <Select value={semester} onChange={(e) => setSemester(e.target.value)}>
             <option value="">كل الفصول</option>
@@ -119,7 +122,7 @@ export default function StudentCourses() {
                           </p>
                         )}
                         <div className="flex items-center gap-4 text-xs text-muted-foreground border-t border-border pt-3 mt-3">
-                          <span>{c.department}</span>
+                          <span>{c.departmentName || c.department || "—"}</span>
                           <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {asNumber(c.credits)} وحدة</span>
                         </div>
                         <div className="mt-4 flex items-center justify-between">

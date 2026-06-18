@@ -17,13 +17,16 @@ export default function BrowseCourses() {
   const enrolledIds = useMemo(() => new Set(enrollments.map((e) => e.courseId)), [enrollments]);
 
   const departments = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of courses) if (c.department) set.add(c.department);
-    return Array.from(set);
+    const map = new Map<string, string>();
+    for (const c of courses) {
+      if (c.departmentId && c.departmentName) map.set(c.departmentId, c.departmentName);
+      else if (c.department) map.set(c.department, c.department);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [courses]);
 
   const filtered = courses.filter((c) => {
-    if (department && c.department !== department) return false;
+    if (department && c.departmentId !== department && c.department !== department) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!c.courseName.toLowerCase().includes(q) && !c.courseCode.toLowerCase().includes(q)) return false;
@@ -57,7 +60,7 @@ export default function BrowseCourses() {
           </div>
           <Select value={department} onChange={(e) => setDepartment(e.target.value)}>
             <option value="">كل الأقسام</option>
-            {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </Select>
         </div>
       </div>
@@ -110,7 +113,7 @@ export default function BrowseCourses() {
                       <p className="text-sm text-muted-foreground mb-2">{c.professorName}</p>
                     )}
                     <p className="text-xs text-muted-foreground mb-4">
-                      {c.department} • {c.semester} <span dir="ltr">{c.academicYear}</span> • {asNumber(c.credits)} وحدة
+                      {c.departmentName || c.department || "—"} • {c.semester} <span dir="ltr">{c.academicYear}</span> • {asNumber(c.credits)} وحدة
                     </p>
                     <div className="mt-auto">
                       {isEnrolled ? (

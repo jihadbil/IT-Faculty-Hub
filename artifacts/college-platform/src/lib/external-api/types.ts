@@ -100,7 +100,11 @@ export interface CourseSummaryDto {
   id: Uuid;
   courseCode: string;
   courseName: string;
-  department: string;
+  /** @deprecated use departmentName */
+  department?: string;
+  departmentId?: Uuid | null;
+  departmentName?: string | null;
+  departmentCode?: string | null;
   credits: number | string;
   semester: string;
   academicYear: string;
@@ -113,7 +117,11 @@ export interface CourseResponseDto {
   courseCode: string;
   courseName: string;
   description?: string | null;
-  department: string;
+  /** @deprecated use departmentName */
+  department?: string;
+  departmentId?: Uuid | null;
+  departmentName?: string | null;
+  departmentCode?: string | null;
   credits: number | string;
   semester: string;
   academicYear: string;
@@ -137,7 +145,7 @@ export interface CreateCourseDto {
   courseCode: string;
   courseName: string;
   description?: string | null;
-  department: string;
+  departmentId: Uuid;
   credits: number;
   semester: SemesterValue | number;
   academicYear: string;
@@ -146,7 +154,7 @@ export interface CreateCourseDto {
 export interface UpdateCourseDto {
   courseName?: string | null;
   description?: string | null;
-  department?: string | null;
+  departmentId?: Uuid | null;
   credits?: number | null;
   semester?: SemesterValue | number | null;
   academicYear?: string | null;
