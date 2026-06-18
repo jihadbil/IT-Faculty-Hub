@@ -23,7 +23,7 @@ import {
 import { Button, Card, Input, Badge, Modal } from "@/components/ui/shared";
 import { useAuth } from "@/lib/auth";
 import { useExam, useExamAttempts } from "@/lib/queries";
-import { examsApi, asNumber, type UpdateExamDto, type Uuid } from "@/lib/external-api";
+import { examsApi, asNumber, normalizeQuestionType, type UpdateExamDto, type Uuid } from "@/lib/external-api";
 import { cn } from "@/lib/utils";
 
 const Q_TYPE_LABEL: Record<string | number, string> = {
@@ -186,7 +186,7 @@ export default function ExamDetail() {
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm break-words">{q.questionText}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {Q_TYPE_LABEL[q.questionType] ?? q.questionType} — {asNumber(q.points)} درجة
+                      {Q_TYPE_LABEL[normalizeQuestionType(q.questionType)] ?? q.questionType} — {asNumber(q.points)} درجة
                     </p>
                   </div>
                   {expandedQ === q.id ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}

@@ -355,6 +355,20 @@ export const QuestionType = {
 } as const;
 export type QuestionTypeValue = number;
 
+const QUESTION_TYPE_STRING_MAP: Record<string, number> = {
+  multiplechoice: 0,
+  mcq: 0,
+  truefalse: 1,
+  shortanswer: 2,
+  essay: 3,
+};
+
+export function normalizeQuestionType(qt: string | number): number {
+  if (typeof qt === "number") return qt;
+  const key = qt.toLowerCase().replace(/[_\s]/g, "");
+  return QUESTION_TYPE_STRING_MAP[key] ?? 0;
+}
+
 export const QUESTION_TYPE_LABEL_AR: Record<number, string> = {
   0: "اختيار من متعدد",
   1: "صح/خطأ",

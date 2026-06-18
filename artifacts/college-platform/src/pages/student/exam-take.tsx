@@ -22,6 +22,7 @@ import { useExam, useMyExamAttempts } from "@/lib/queries";
 import {
   examsApi,
   asNumber,
+  normalizeQuestionType,
   type ExamAnswerItemDto,
   type ExamAttemptResponseDto,
   type Uuid,
@@ -276,7 +277,7 @@ export default function StudentExamTake() {
                 </div>
               </div>
 
-              {(q.questionType === 0 || q.questionType === 1) && q.options && (
+              {(normalizeQuestionType(q.questionType) === 0 || normalizeQuestionType(q.questionType) === 1) && q.options && q.options.length > 0 && (
                 <div className="space-y-2 pr-11">
                   {q.options.map((opt) => {
                     const selected = myAnswer?.selectedOptionId === opt.id;
@@ -304,7 +305,7 @@ export default function StudentExamTake() {
                 </div>
               )}
 
-              {q.questionType === 2 && (
+              {normalizeQuestionType(q.questionType) === 2 && (
                 <div className="pr-11">
                   <textarea
                     value={myAnswer?.textAnswer ?? ""}
