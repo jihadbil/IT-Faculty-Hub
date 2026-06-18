@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -9,7 +9,10 @@ import {
   ClipboardCheck,
   ClipboardList,
   Clock,
+  Download,
   ExternalLink,
+  FileText,
+  FolderOpen,
   Globe,
   Loader2,
   PenLine,
@@ -21,6 +24,7 @@ import {
   Target,
   Trash2,
   TrendingUp,
+  Upload,
   X,
 } from "lucide-react";
 import { Badge, Button, Card, Input, Modal, Select } from "@/components/ui/shared";
@@ -28,14 +32,17 @@ import {
   ASSESSMENT_TYPE_LABEL_AR,
   ATTENDANCE_STATUS_LABEL_AR,
   ATTENDANCE_STATUS_FROM_LABEL,
+  FILE_TYPE_LABEL_AR,
   asNumber,
   assessmentsApi,
   attendanceApi,
   examsApi,
+  filesApi,
   liveSessionsApi,
   type AssessmentResponseDto,
   type AttendanceRecordItemDto,
   type AttendanceSessionResponseDto,
+  type CourseFileResponseDto,
   type ExamAttemptResponseDto,
   type ExamResponseDto,
   type GradeResponseDto,
@@ -47,6 +54,7 @@ import {
   useAssessmentGrades,
   useAssessments,
   useAttendanceSessions,
+  useCourseFiles,
   useEnrollmentsForCourse,
   useExams,
   useLiveSessions,
@@ -55,6 +63,28 @@ import {
   useMyGrades,
   useUsers,
 } from "@/lib/queries";
+
+const FILE_TYPES = [0, 1, 2, 3, 4];
+
+function formatBytes(n: number | string): string {
+  const v = Number(n);
+  if (!v || v < 0) return "—";
+  if (v < 1024) return `${v} B`;
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+  return `${(v / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function mimeEmoji(mime: string): string {
+  if (mime.includes("pdf")) return "📄";
+  if (mime.includes("image")) return "🖼";
+  if (mime.includes("video")) return "🎬";
+  if (mime.includes("audio")) return "🎵";
+  if (mime.includes("zip") || mime.includes("compressed")) return "🗜";
+  if (mime.includes("word") || mime.includes("document")) return "📝";
+  if (mime.includes("sheet") || mime.includes("excel")) return "📊";
+  if (mime.includes("presentation") || mime.includes("powerpoint")) return "📊";
+  return "📁";
+}
 
 interface TabProps {
   courseId: Uuid;
@@ -1005,6 +1035,224 @@ export function StudentsTab({ courseId, canEdit }: TabProps) {
         </div>
       )}
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// FILES TAB
+// ────────────────────────────────────────────────────────────
+export function FilesTab({ courseId, canEdit, studentMode }: TabProps) {
+  const qc = useQueryClient();
+  const { data, isLoading, error } = useCourseFiles(courseId);
+  const files = data?.items ?? [];
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  const deleteFile = useMutation({
+    mutationFn: (id: number) => filesApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["external", "course", courseId, "files"] }),
+  });
+
+  if (isLoading) return <LoadingPlaceholder />;
+  if (error) return <ErrorPlaceholder error={error as Error} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-display font-bold flex items-center gap-2">
+          <FolderOpen className="w-6 h-6 text-primary" /> ملفات المادة
+        </h2>
+        {canEdit && !studentMode && (
+          <Button size="sm" onClick={() => setUploadOpen(true)} className="gap-2">
+            <Upload className="w-4 h-4" /> رفع ملف
+          </Button>
+        )}
+      </div>
+
+      {files.length === 0 ? (
+        <EmptyPlaceholder icon={FolderOpen} text="لا توجد ملفات لهذه المادة بعد." />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {files.map((f) => (
+            <FileCard
+              key={f.id}
+              file={f}
+              canEdit={canEdit && !studentMode}
+              onDelete={(id) => { if (confirm("حذف هذا الملف؟")) deleteFile.mutate(id); }}
+            />
+          ))}
+        </div>
+      )}
+
+      {uploadOpen && (
+        <UploadFileModal
+          courseId={courseId}
+          onClose={() => setUploadOpen(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ["external", "course", courseId, "files"] });
+            setUploadOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function FileCard({
+  file,
+  canEdit,
+  onDelete,
+}: {
+  file: CourseFileResponseDto;
+  canEdit: boolean;
+  onDelete: (id: number) => void;
+}) {
+  const label = FILE_TYPE_LABEL_AR[Number(file.fileType)] ?? "ملف";
+  return (
+    <Card className="p-4 flex items-start gap-4 hover:border-primary/30 transition-all group">
+      <div className="text-3xl shrink-0 mt-0.5">{mimeEmoji(file.mimeType)}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-bold text-foreground break-words leading-snug">{file.title}</p>
+          <Badge variant="outline" className="shrink-0 text-xs">{label}</Badge>
+        </div>
+        {file.description && (
+          <p className="text-xs text-muted-foreground mt-1 break-words line-clamp-2">{file.description}</p>
+        )}
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+          <span className="flex items-center gap-1">
+            <FileText className="w-3 h-3" /> {file.fileName}
+          </span>
+          <span>{formatBytes(file.fileSize)}</span>
+          <span className="flex items-center gap-1">
+            <Download className="w-3 h-3" /> {asNumber(file.downloads)}
+          </span>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <a
+            href={file.downloadUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-muted text-foreground text-xs font-bold transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" /> تنزيل
+          </a>
+          {canEdit && (
+            <button
+              onClick={() => onDelete(file.id)}
+              className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              aria-label="حذف"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function UploadFileModal({
+  courseId,
+  onClose,
+  onSuccess,
+}: {
+  courseId: Uuid;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [fileType, setFileType] = useState(0);
+  const [file, setFile] = useState<File | null>(null);
+  const [err, setErr] = useState("");
+
+  const upload = useMutation({
+    mutationFn: async () => {
+      if (!file || !title.trim()) throw new Error("أكمل الحقول المطلوبة");
+      const fd = new FormData();
+      fd.append("CourseId", courseId);
+      fd.append("Title", title.trim());
+      fd.append("Description", description.trim());
+      fd.append("FileType", String(fileType));
+      fd.append("File", file);
+      return filesApi.uploadToCourse(courseId, fd);
+    },
+    onSuccess,
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  return (
+    <Modal isOpen onClose={onClose} title="رفع ملف جديد">
+      <div className="space-y-4">
+        {err && (
+          <div className="p-3 bg-destructive/10 text-destructive rounded-xl text-sm flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{err}</span>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-bold mb-2">العنوان <span className="text-destructive">*</span></label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="عنوان الملف"
+            maxLength={200}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold mb-2">الوصف</label>
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="وصف اختياري..."
+            maxLength={500}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold mb-2">نوع الملف</label>
+          <Select value={fileType} onChange={(e) => setFileType(Number(e.target.value))}>
+            {FILE_TYPES.map((t) => (
+              <option key={t} value={t}>{FILE_TYPE_LABEL_AR[t]}</option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold mb-2">الملف <span className="text-destructive">*</span></label>
+          <div
+            onClick={() => fileRef.current?.click()}
+            className="border-2 border-dashed border-border rounded-2xl p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+          >
+            {file ? (
+              <p className="font-bold text-primary text-sm break-all">{file.name}</p>
+            ) : (
+              <div>
+                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">انقر لاختيار ملف</p>
+              </div>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); setErr(""); }}
+          />
+        </div>
+
+        <div className="pt-2 flex justify-end gap-3">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button isLoading={upload.isPending} onClick={() => upload.mutate()} disabled={!file || !title.trim()}>
+            <Upload className="w-4 h-4" /> رفع الملف
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

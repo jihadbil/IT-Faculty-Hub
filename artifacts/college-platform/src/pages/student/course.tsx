@@ -15,23 +15,23 @@ import {
   ClipboardCheck,
   CalendarCheck,
   ClipboardList,
-  RadioTower,
+  FolderOpen,
   Power,
 } from "lucide-react";
 import { Card, Badge, Button, Modal } from "@/components/ui/shared";
 import { useCourse, useCourseVideos, colorForCourse, useMyEnrollments } from "@/lib/queries";
 import { videosApi, enrollmentsApi, asNumber, type VideoLectureResponseDto } from "@/lib/external-api";
-import { AssessmentsTab, AttendanceTab, ExamsTab, LiveSessionsTab } from "@/components/course-tabs";
+import { AssessmentsTab, AttendanceTab, ExamsTab, FilesTab } from "@/components/course-tabs";
 import { cn } from "@/lib/utils";
 
-type TabKey = "videos" | "assessments" | "attendance" | "exams" | "live";
+type TabKey = "videos" | "files" | "assessments" | "attendance" | "exams";
 
 const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "videos", label: "الفيديوهات", icon: Video },
+  { key: "files", label: "الملفات", icon: FolderOpen },
   { key: "assessments", label: "درجاتي", icon: ClipboardCheck },
   { key: "attendance", label: "حضوري", icon: CalendarCheck },
   { key: "exams", label: "الامتحانات", icon: ClipboardList },
-  { key: "live", label: "البث المباشر", icon: RadioTower },
 ];
 
 export default function StudentCourse() {
@@ -233,10 +233,10 @@ export default function StudentCourse() {
         </div>
       )}
 
+      {tab === "files" && <FilesTab courseId={course.id} canEdit={false} studentMode />}
       {tab === "assessments" && <AssessmentsTab courseId={course.id} canEdit={false} studentMode />}
       {tab === "attendance" && <AttendanceTab courseId={course.id} canEdit={false} studentMode />}
       {tab === "exams" && <ExamsTab courseId={course.id} canEdit={false} studentMode />}
-      {tab === "live" && <LiveSessionsTab courseId={course.id} canEdit={false} studentMode />}
 
       {activeVideo && activeVideo.streamUrl && (
         <div

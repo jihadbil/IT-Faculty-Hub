@@ -18,7 +18,7 @@ import {
   ClipboardCheck,
   CalendarCheck,
   ClipboardList,
-  RadioTower,
+  FolderOpen,
   Users as UsersIcon,
   Pencil,
 } from "lucide-react";
@@ -40,7 +40,7 @@ import {
   AssessmentsTab,
   AttendanceTab,
   ExamsTab,
-  LiveSessionsTab,
+  FilesTab,
   StudentsTab,
 } from "@/components/course-tabs";
 import { cn } from "@/lib/utils";
@@ -58,14 +58,14 @@ const editCourseSchema = z.object({
 });
 type EditCourseValues = z.infer<typeof editCourseSchema>;
 
-type TabKey = "videos" | "assessments" | "attendance" | "exams" | "live" | "students";
+type TabKey = "videos" | "files" | "assessments" | "attendance" | "exams" | "students";
 
 const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "videos", label: "الفيديوهات", icon: Video },
+  { key: "files", label: "الملفات", icon: FolderOpen },
   { key: "assessments", label: "التقييمات", icon: ClipboardCheck },
   { key: "attendance", label: "الحضور", icon: CalendarCheck },
   { key: "exams", label: "الامتحانات", icon: ClipboardList },
-  { key: "live", label: "البث المباشر", icon: RadioTower },
   { key: "students", label: "الطلاب", icon: UsersIcon },
 ];
 
@@ -252,10 +252,10 @@ export default function CourseDetails() {
       </div>
 
       {tab === "videos" && <VideosTab courseId={course.id} canEdit={canEdit} color={color} />}
+      {tab === "files" && <FilesTab courseId={course.id} canEdit={canEdit} />}
       {tab === "assessments" && <AssessmentsTab courseId={course.id} canEdit={canEdit} />}
       {tab === "attendance" && <AttendanceTab courseId={course.id} canEdit={canEdit} />}
       {tab === "exams" && <ExamsTab courseId={course.id} canEdit={canEdit} />}
-      {tab === "live" && <LiveSessionsTab courseId={course.id} canEdit={canEdit} />}
       {tab === "students" && <StudentsTab courseId={course.id} canEdit={canEdit} />}
 
       {/* ── Edit Modal ── */}
