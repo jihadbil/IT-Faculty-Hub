@@ -161,6 +161,10 @@ export interface UpdateCourseDto {
   isActive?: boolean | null;
 }
 
+export interface AssignProfessorDto {
+  professorId: Uuid;
+}
+
 export interface PagedResult<T> {
   items: T[];
   totalCount: number | string;

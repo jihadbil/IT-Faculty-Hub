@@ -2,6 +2,7 @@ import { apiClient } from "./client";
 import type {
   AdminStatsResponseDto,
   AssessmentResponseDto,
+  AssignProfessorDto,
   AttendanceSessionResponseDto,
   AuthResponseDto,
   ConversationResponseDto,
@@ -91,6 +92,8 @@ export const coursesApi = {
     apiClient.post<CourseResponseDto>("/api/courses", { body }),
   update: (id: Uuid, body: UpdateCourseDto) =>
     apiClient.put<CourseResponseDto>(`/api/courses/${id}`, { body }),
+  assignProfessor: (id: Uuid, body: AssignProfessorDto) =>
+    apiClient.put<CourseResponseDto>(`/api/admin/courses/${id}/assign-professor`, { body }),
   remove: (id: Uuid) => apiClient.del<void>(`/api/courses/${id}`),
 };
 

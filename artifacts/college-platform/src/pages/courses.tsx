@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, BookOpen, Clock, Users, Trash2, ChevronLeft, AlertCircle } from "lucide-react";
+import { Plus, BookOpen, Clock, Users, Trash2, ChevronLeft, AlertCircle, Pencil } from "lucide-react";
 import { Button, Card, Modal, Input, Select, Badge } from "@/components/ui/shared";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,15 +21,23 @@ const courseSchema = z.object({
   academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
 });
 
+const editSchema = z.object({
+  courseName: z.string().min(2, "اسم المادة مطلوب"),
+  description: z.string().max(1000).optional(),
+  departmentId: z.string().min(1, "القسم مطلوب"),
+  credits: z.coerce.number().min(1).max(6),
+  semester: z.coerce.number().min(0).max(2),
+  academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
+  isActive: z.boolean().optional(),
+  professorId: z.string().optional(),
+});
+
 type CourseFormValues = z.infer<typeof courseSchema>;
+type EditFormValues = z.infer<typeof editSchema>;
 
 function thisAcademicYear(): string {
   const y = new Date().getFullYear();
   return `${y}-${y + 1}`;
-}
-
-function deptLabel(c: CourseSummaryDto): string {
-  return c.departmentName || c.department || "—";
 }
 
 export default function Courses() {
@@ -68,24 +76,70 @@ export default function Courses() {
     },
   });
 
+  const updateCourse = useMutation({
+    mutationFn: async (data: EditFormValues & { id: Uuid; originalProfessorId?: string }) => {
+      const { id, originalProfessorId, professorId, ...rest } = data;
+      await coursesApi.update(id, {
+        courseName: rest.courseName,
+        description: rest.description || null,
+        departmentId: rest.departmentId as Uuid,
+        credits: rest.credits,
+        semester: rest.semester,
+        academicYear: rest.academicYear,
+        isActive: rest.isActive,
+      });
+      if (isAdmin && professorId && professorId !== originalProfessorId) {
+        await coursesApi.assignProfessor(id, { professorId: professorId as Uuid });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["external", "courses"] });
+      queryClient.invalidateQueries({ queryKey: ["external", "course"] });
+      setEditCourse(null);
+    },
+  });
+
   const deleteCourse = useMutation({
     mutationFn: (id: string) => coursesApi.remove(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["external", "courses"] }),
   });
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editCourse, setEditCourse] = useState<CourseSummaryDto | null>(null);
   const [filterDept, setFilterDept] = useState<string>("all");
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: {
-      credits: 3,
-      semester: 0,
-      academicYear: thisAcademicYear(),
-    },
+    defaultValues: { credits: 3, semester: 0, academicYear: thisAcademicYear() },
   });
 
+  const {
+    register: regEdit,
+    handleSubmit: handleEditSubmit,
+    formState: { errors: editErrors },
+    reset: resetEdit,
+    setValue: setEditValue,
+  } = useForm<EditFormValues>({ resolver: zodResolver(editSchema) });
+
+  const openEdit = (course: CourseSummaryDto) => {
+    setEditCourse(course);
+    resetEdit({
+      courseName: course.courseName,
+      description: undefined,
+      departmentId: course.departmentId ?? "",
+      credits: asNumber(course.credits),
+      semester: 0,
+      academicYear: course.academicYear,
+      isActive: course.isActive,
+      professorId: "",
+    });
+  };
+
   const onSubmit = (data: CourseFormValues) => createCourse.mutate(data);
+  const onEditSubmit = (data: EditFormValues) => {
+    if (!editCourse) return;
+    updateCourse.mutate({ ...data, id: editCourse.id as Uuid });
+  };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -107,11 +161,7 @@ export default function Courses() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Select
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value)}
-            className="w-52 bg-muted/50"
-          >
+          <Select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} className="w-52 bg-muted/50">
             <option value="all">كل الأقسام</option>
             {departments.map((d) => (
               <option key={d.id as string} value={d.id as string}>{d.name}</option>
@@ -150,9 +200,9 @@ export default function Courses() {
               idx={idx}
               isAdmin={isAdmin}
               onDelete={handleDelete}
+              onEdit={openEdit}
             />
           ))}
-
           {filtered.length === 0 && !error && (
             <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-border">
               <BookOpen className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
@@ -165,6 +215,7 @@ export default function Courses() {
         </div>
       )}
 
+      {/* ── نافذة الإضافة ── */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="إضافة مادة جديدة">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -179,12 +230,10 @@ export default function Courses() {
               {errors.courseCode && <span className="text-xs text-destructive">{errors.courseCode.message}</span>}
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-bold mb-2">الوصف</label>
             <Input {...register("description")} placeholder="وصف مختصر للمادة..." />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">القسم الأكاديمي</label>
@@ -202,7 +251,6 @@ export default function Courses() {
               {errors.academicYear && <span className="text-xs text-destructive">{errors.academicYear.message}</span>}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
@@ -218,20 +266,105 @@ export default function Courses() {
               {errors.credits && <span className="text-xs text-destructive">{errors.credits.message}</span>}
             </div>
           </div>
-
           <p className="text-xs text-muted-foreground">
-            ملاحظة: سيتم تعيين المادة تلقائياً للأستاذ الذي يقوم بإنشائها — لا يمكن تعيين أستاذ آخر من هنا.
+            ملاحظة: سيتم تعيين المادة تلقائياً للأستاذ الذي يقوم بإنشائها.
           </p>
-
           {createCourse.isError && (
-            <p className="text-sm text-destructive break-words">
-              {(createCourse.error as Error).message}
-            </p>
+            <p className="text-sm text-destructive break-words">{(createCourse.error as Error).message}</p>
           )}
-
           <div className="pt-6 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => setIsAddModalOpen(false)}>إلغاء</Button>
             <Button type="submit" isLoading={createCourse.isPending}>حفظ المادة</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── نافذة التعديل ── */}
+      <Modal
+        isOpen={!!editCourse}
+        onClose={() => setEditCourse(null)}
+        title={`تعديل: ${editCourse?.courseName ?? ""}`}
+      >
+        <form onSubmit={handleEditSubmit(onEditSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">اسم المادة</label>
+            <Input {...regEdit("courseName")} />
+            {editErrors.courseName && <span className="text-xs text-destructive">{editErrors.courseName.message}</span>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">الوصف</label>
+            <Input {...regEdit("description")} placeholder="وصف مختصر للمادة..." />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">القسم الأكاديمي</label>
+              <Select {...regEdit("departmentId")}>
+                <option value="">— اختر القسم —</option>
+                {departments.map((d) => (
+                  <option key={d.id as string} value={d.id as string}>{d.name}</option>
+                ))}
+              </Select>
+              {editErrors.departmentId && <span className="text-xs text-destructive">{editErrors.departmentId.message}</span>}
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">السنة الأكاديمية</label>
+              <Input {...regEdit("academicYear")} dir="ltr" className="text-left" />
+              {editErrors.academicYear && <span className="text-xs text-destructive">{editErrors.academicYear.message}</span>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
+              <Select {...regEdit("semester")}>
+                <option value={0}>الفصل الأول (Fall)</option>
+                <option value={1}>الفصل الثاني (Spring)</option>
+                <option value={2}>الفصل الصيفي (Summer)</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
+              <Input type="number" min={1} max={6} {...regEdit("credits")} />
+              {editErrors.credits && <span className="text-xs text-destructive">{editErrors.credits.message}</span>}
+            </div>
+          </div>
+
+          {isAdmin && (
+            <div>
+              <label className="block text-sm font-bold mb-2">الأستاذ المسؤول</label>
+              <Select {...regEdit("professorId")}>
+                <option value="">— لا تغيير —</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>{t.fullName}</option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                اترك هذا الحقل فارغاً إذا لم تريد تغيير الأستاذ الحالي.
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-muted/40 border border-border">
+            <input
+              type="checkbox"
+              id="isActiveEdit"
+              className="w-4 h-4 accent-primary"
+              {...regEdit("isActive")}
+            />
+            <label htmlFor="isActiveEdit" className="text-sm font-bold cursor-pointer">
+              المادة مفعّلة (ظاهرة للطلاب)
+            </label>
+          </div>
+
+          {updateCourse.isError && (
+            <p className="text-sm text-destructive break-words">{(updateCourse.error as Error).message}</p>
+          )}
+
+          <div className="pt-6 flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setEditCourse(null)}>إلغاء</Button>
+            <Button type="submit" isLoading={updateCourse.isPending}>حفظ التعديلات</Button>
           </div>
         </form>
       </Modal>
@@ -244,11 +377,13 @@ function CourseCard({
   idx,
   isAdmin,
   onDelete,
+  onEdit,
 }: {
   course: CourseSummaryDto;
   idx: number;
   isAdmin: boolean;
   onDelete: (e: React.MouseEvent, id: string) => void;
+  onEdit: (course: CourseSummaryDto) => void;
 }) {
   const color = colorForCourse(course.id);
   const deptDisplay = course.departmentName || course.department || "";
@@ -266,13 +401,25 @@ function CourseCard({
               <Badge variant="outline" className="bg-muted/50 font-mono text-sm tracking-wider">
                 {course.courseCode}
               </Badge>
-              {isAdmin && (
-                <button
-                  onClick={(e) => onDelete(e, course.id)}
-                  className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+              {(isAdmin || true) && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(course); }}
+                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-colors"
+                    title="تعديل المادة"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => onDelete(e, course.id)}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                      title="حذف المادة"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <h3 className="text-2xl font-display font-bold text-foreground mb-2 group-hover:text-primary transition-colors">

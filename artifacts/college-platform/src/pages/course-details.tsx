@@ -20,12 +20,17 @@ import {
   ClipboardList,
   RadioTower,
   Users as UsersIcon,
+  Pencil,
 } from "lucide-react";
-import { Button, Card, Modal, Input, Badge } from "@/components/ui/shared";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button, Card, Modal, Input, Select, Badge } from "@/components/ui/shared";
 import { useAuth } from "@/lib/auth";
-import { useCourse, useCourseVideos, colorForCourse } from "@/lib/queries";
+import { useCourse, useCourseVideos, colorForCourse, useDepartments, useUsers } from "@/lib/queries";
 import {
   videosApi,
+  coursesApi,
   asNumber,
   type VideoLectureResponseDto,
   type Uuid,
@@ -40,6 +45,19 @@ import {
 } from "@/components/course-tabs";
 import { cn } from "@/lib/utils";
 
+// ── Edit form schema ──
+const editCourseSchema = z.object({
+  courseName: z.string().min(2, "اسم المادة مطلوب"),
+  description: z.string().max(1000).optional(),
+  departmentId: z.string().min(1, "القسم مطلوب"),
+  credits: z.coerce.number().min(1).max(6),
+  semester: z.coerce.number().min(0).max(2),
+  academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
+  isActive: z.boolean().optional(),
+  professorId: z.string().optional(),
+});
+type EditCourseValues = z.infer<typeof editCourseSchema>;
+
 type TabKey = "videos" | "assessments" | "attendance" | "exams" | "live" | "students";
 
 const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -52,6 +70,7 @@ const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?
 ];
 
 export default function CourseDetails() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [, paramsTeacher] = useRoute("/courses/:id");
   const [, paramsAdmin] = useRoute("/admin/courses/:id");
@@ -59,13 +78,70 @@ export default function CourseDetails() {
 
   const { data: course, isLoading: loadingCourse, error } = useCourse(courseId);
   const { data: videos = [] } = useCourseVideos(courseId);
+  const { data: departments = [] } = useDepartments();
+  const { data: users = [] } = useUsers();
 
   const [tab, setTab] = useState<TabKey>("videos");
+  const [editOpen, setEditOpen] = useState(false);
 
   const isAdmin = user?.role === "admin";
   const isOwnerTeacher = user?.role === "teacher" && course?.professor?.id === user?.id;
   const canEdit = isAdmin || isOwnerTeacher;
   const isTeacherButNotOwner = user?.role === "teacher" && course && course.professor?.id !== user.id;
+
+  const teachers = React.useMemo(
+    () =>
+      users.filter((u) => {
+        const lower = u.roles.map((r) => r.toLowerCase());
+        return lower.some((r) => /teacher|instructor|professor/.test(r));
+      }),
+    [users],
+  );
+
+  const {
+    register: regEdit,
+    handleSubmit: handleEditSubmit,
+    formState: { errors: editErrors },
+    reset: resetEdit,
+  } = useForm<EditCourseValues>({ resolver: zodResolver(editCourseSchema) });
+
+  const updateCourse = useMutation({
+    mutationFn: async (data: EditCourseValues) => {
+      if (!courseId) return;
+      await coursesApi.update(courseId, {
+        courseName: data.courseName,
+        description: data.description || null,
+        departmentId: data.departmentId as Uuid,
+        credits: data.credits,
+        semester: data.semester,
+        academicYear: data.academicYear,
+        isActive: data.isActive,
+      });
+      if (isAdmin && data.professorId) {
+        await coursesApi.assignProfessor(courseId, { professorId: data.professorId as Uuid });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["external", "course", courseId] });
+      queryClient.invalidateQueries({ queryKey: ["external", "courses"] });
+      setEditOpen(false);
+    },
+  });
+
+  const openEditModal = () => {
+    if (!course) return;
+    resetEdit({
+      courseName: course.courseName,
+      description: course.description ?? undefined,
+      departmentId: course.departmentId ?? "",
+      credits: asNumber(course.credits),
+      semester: 0,
+      academicYear: course.academicYear,
+      isActive: course.isActive,
+      professorId: course.professor?.id ?? "",
+    });
+    setEditOpen(true);
+  };
 
   if (loadingCourse) return <div className="p-12 text-center text-xl animate-pulse">جاري التحميل...</div>;
   if (error)
@@ -92,13 +168,25 @@ export default function CourseDetails() {
         </span>
       </Link>
 
+      {/* ── Header ── */}
       <div className="relative rounded-3xl overflow-hidden shadow-xl p-8 md:p-12 text-white" style={{ backgroundColor: color }}>
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="min-w-0 flex-1">
-            <Badge variant="outline" className="bg-white/20 text-white border-white/30 mb-4 font-mono">
-              {course.courseCode}
-            </Badge>
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <Badge variant="outline" className="bg-white/20 text-white border-white/30 font-mono">
+                {course.courseCode}
+              </Badge>
+              {canEdit && (
+                <button
+                  onClick={openEditModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-bold transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  تعديل المادة
+                </button>
+              )}
+            </div>
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-3 break-words">{course.courseName}</h1>
             <p className="text-white/80 max-w-2xl text-lg break-words">{course.description || "لا يوجد وصف"}</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm text-white/80">
@@ -124,6 +212,7 @@ export default function CourseDetails() {
         </div>
       </div>
 
+      {/* ── Schedules ── */}
       {course.schedules?.length > 0 && (
         <Card className="p-6">
           <h2 className="text-xl font-display font-bold mb-4">أوقات المحاضرات</h2>
@@ -141,7 +230,7 @@ export default function CourseDetails() {
         </Card>
       )}
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div className="bg-white rounded-2xl border border-border p-2 overflow-x-auto">
         <div className="flex gap-1 min-w-max">
           {TABS.map((t) => (
@@ -162,20 +251,114 @@ export default function CourseDetails() {
         </div>
       </div>
 
-      {tab === "videos" && (
-        <VideosTab courseId={course.id} canEdit={canEdit} color={color} />
-      )}
+      {tab === "videos" && <VideosTab courseId={course.id} canEdit={canEdit} color={color} />}
       {tab === "assessments" && <AssessmentsTab courseId={course.id} canEdit={canEdit} />}
       {tab === "attendance" && <AttendanceTab courseId={course.id} canEdit={canEdit} />}
       {tab === "exams" && <ExamsTab courseId={course.id} canEdit={canEdit} />}
       {tab === "live" && <LiveSessionsTab courseId={course.id} canEdit={canEdit} />}
       {tab === "students" && <StudentsTab courseId={course.id} canEdit={canEdit} />}
+
+      {/* ── Edit Modal ── */}
+      <Modal isOpen={editOpen} onClose={() => setEditOpen(false)} title="تعديل بيانات المادة">
+        <form onSubmit={handleEditSubmit((d) => updateCourse.mutate(d))} className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">اسم المادة</label>
+            <Input {...regEdit("courseName")} />
+            {editErrors.courseName && (
+              <span className="text-xs text-destructive">{editErrors.courseName.message}</span>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">الوصف</label>
+            <Input {...regEdit("description")} placeholder="وصف مختصر للمادة..." />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">القسم الأكاديمي</label>
+              <Select {...regEdit("departmentId")}>
+                <option value="">— اختر القسم —</option>
+                {departments.map((d) => (
+                  <option key={d.id as string} value={d.id as string}>{d.name}</option>
+                ))}
+              </Select>
+              {editErrors.departmentId && (
+                <span className="text-xs text-destructive">{editErrors.departmentId.message}</span>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">السنة الأكاديمية</label>
+              <Input {...regEdit("academicYear")} dir="ltr" className="text-left" />
+              {editErrors.academicYear && (
+                <span className="text-xs text-destructive">{editErrors.academicYear.message}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
+              <Select {...regEdit("semester")}>
+                <option value={0}>الفصل الأول (Fall)</option>
+                <option value={1}>الفصل الثاني (Spring)</option>
+                <option value={2}>الفصل الصيفي (Summer)</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
+              <Input type="number" min={1} max={6} {...regEdit("credits")} />
+              {editErrors.credits && (
+                <span className="text-xs text-destructive">{editErrors.credits.message}</span>
+              )}
+            </div>
+          </div>
+
+          {isAdmin && (
+            <div>
+              <label className="block text-sm font-bold mb-2">الأستاذ المسؤول</label>
+              <Select {...regEdit("professorId")}>
+                <option value="">— لا تغيير —</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>{t.fullName}</option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                اترك هذا الحقل فارغاً إذا لم تريد تغيير الأستاذ الحالي.
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-muted/40 border border-border">
+            <input
+              type="checkbox"
+              id="isActiveChk"
+              className="w-4 h-4 accent-primary"
+              {...regEdit("isActive")}
+            />
+            <label htmlFor="isActiveChk" className="text-sm font-bold cursor-pointer">
+              المادة مفعّلة (ظاهرة للطلاب)
+            </label>
+          </div>
+
+          {updateCourse.isError && (
+            <p className="text-sm text-destructive break-words">
+              {(updateCourse.error as Error).message}
+            </p>
+          )}
+
+          <div className="pt-4 flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setEditOpen(false)}>إلغاء</Button>
+            <Button type="submit" isLoading={updateCourse.isPending}>حفظ التعديلات</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
 // ─────────────────────────────────────────
-// Videos tab (was the original page body)
+// Videos tab
 // ─────────────────────────────────────────
 function VideosTab({ courseId, canEdit, color }: { courseId: Uuid; canEdit: boolean; color: string }) {
   const queryClient = useQueryClient();
