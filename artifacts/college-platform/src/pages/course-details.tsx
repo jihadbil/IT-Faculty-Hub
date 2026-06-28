@@ -51,7 +51,6 @@ const editCourseSchema = z.object({
   description: z.string().max(1000).optional(),
   departmentId: z.string().min(1, "القسم مطلوب"),
   credits: z.coerce.number().min(1).max(6),
-  semester: z.coerce.number().min(0).max(2),
   academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
   isActive: z.boolean().optional(),
   professorId: z.string().optional(),
@@ -113,7 +112,6 @@ export default function CourseDetails() {
         description: data.description || null,
         departmentId: data.departmentId as Uuid,
         credits: data.credits,
-        semester: data.semester,
         academicYear: data.academicYear,
         isActive: data.isActive,
       });
@@ -135,7 +133,6 @@ export default function CourseDetails() {
       description: course.description ?? undefined,
       departmentId: course.departmentId ?? "",
       credits: asNumber(course.credits),
-      semester: 0,
       academicYear: course.academicYear,
       isActive: course.isActive,
       professorId: course.professor?.id ?? "",
@@ -192,7 +189,7 @@ export default function CourseDetails() {
             <div className="mt-4 flex flex-wrap gap-3 text-sm text-white/80">
               <span>📍 {course.departmentName || course.department || "—"}</span>
               <span>👤 {course.professor?.fullName || "—"}</span>
-              <span dir="ltr">📅 {course.semester} • {course.academicYear}</span>
+              <span dir="ltr">📅 {course.academicYear}</span>
             </div>
           </div>
           <div className="flex gap-4 text-center">
@@ -296,22 +293,12 @@ export default function CourseDetails() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
-              <Select {...regEdit("semester")}>
-                <option value={0}>الفصل الأول (Fall)</option>
-                <option value={1}>الفصل الثاني (Spring)</option>
-                <option value={2}>الفصل الصيفي (Summer)</option>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
-              <Input type="number" min={1} max={6} {...regEdit("credits")} />
-              {editErrors.credits && (
-                <span className="text-xs text-destructive">{editErrors.credits.message}</span>
-              )}
-            </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
+            <Input type="number" min={1} max={6} {...regEdit("credits")} />
+            {editErrors.credits && (
+              <span className="text-xs text-destructive">{editErrors.credits.message}</span>
+            )}
           </div>
 
           {isAdmin && (

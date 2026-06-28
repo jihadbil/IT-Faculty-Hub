@@ -17,8 +17,8 @@ const courseSchema = z.object({
   description: z.string().max(1000).optional(),
   departmentId: z.string().min(1, "القسم مطلوب"),
   credits: z.coerce.number().min(1).max(6),
-  semester: z.coerce.number().min(0).max(2),
   academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
+  professorId: z.string().optional(),
 });
 
 const editSchema = z.object({
@@ -26,7 +26,6 @@ const editSchema = z.object({
   description: z.string().max(1000).optional(),
   departmentId: z.string().min(1, "القسم مطلوب"),
   credits: z.coerce.number().min(1).max(6),
-  semester: z.coerce.number().min(0).max(2),
   academicYear: z.string().min(1, "السنة الأكاديمية مطلوبة"),
   isActive: z.boolean().optional(),
   professorId: z.string().optional(),
@@ -59,16 +58,20 @@ export default function Courses() {
   );
 
   const createCourse = useMutation({
-    mutationFn: (data: CourseFormValues) =>
-      coursesApi.create({
+    mutationFn: async (data: CourseFormValues) => {
+      const created = await coursesApi.create({
         courseCode: data.courseCode,
         courseName: data.courseName,
         description: data.description || undefined,
         departmentId: data.departmentId as Uuid,
         credits: data.credits,
-        semester: data.semester,
         academicYear: data.academicYear,
-      }),
+      });
+      if (data.professorId) {
+        await coursesApi.assignProfessor(created.id as Uuid, { professorId: data.professorId as Uuid });
+      }
+      return created;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["external", "courses"] });
       setIsAddModalOpen(false);
@@ -84,7 +87,6 @@ export default function Courses() {
         description: rest.description || null,
         departmentId: rest.departmentId as Uuid,
         credits: rest.credits,
-        semester: rest.semester,
         academicYear: rest.academicYear,
         isActive: rest.isActive,
       });
@@ -110,7 +112,7 @@ export default function Courses() {
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: { credits: 3, semester: 0, academicYear: thisAcademicYear() },
+    defaultValues: { credits: 3, academicYear: thisAcademicYear(), professorId: "" },
   });
 
   const {
@@ -128,7 +130,6 @@ export default function Courses() {
       description: undefined,
       departmentId: course.departmentId ?? "",
       credits: asNumber(course.credits),
-      semester: 0,
       academicYear: course.academicYear,
       isActive: course.isActive,
       professorId: "",
@@ -251,24 +252,21 @@ export default function Courses() {
               {errors.academicYear && <span className="text-xs text-destructive">{errors.academicYear.message}</span>}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
-              <Select {...register("semester")}>
-                <option value={0}>الفصل الأول (Fall)</option>
-                <option value={1}>الفصل الثاني (Spring)</option>
-                <option value={2}>الفصل الصيفي (Summer)</option>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
-              <Input type="number" min={1} max={6} {...register("credits")} />
-              {errors.credits && <span className="text-xs text-destructive">{errors.credits.message}</span>}
-            </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
+            <Input type="number" min={1} max={6} {...register("credits")} />
+            {errors.credits && <span className="text-xs text-destructive">{errors.credits.message}</span>}
           </div>
-          <p className="text-xs text-muted-foreground">
-            ملاحظة: سيتم تعيين المادة تلقائياً للأستاذ الذي يقوم بإنشائها.
-          </p>
+          <div>
+            <label className="block text-sm font-bold mb-2">الأستاذ المسؤول</label>
+            <Select {...register("professorId")}>
+              <option value="">— اختر أستاذاً (اختياري) —</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>{t.fullName}</option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">يمكن تعيين الأستاذ لاحقاً من صفحة تفاصيل المادة.</p>
+          </div>
           {createCourse.isError && (
             <p className="text-sm text-destructive break-words">{(createCourse.error as Error).message}</p>
           )}
@@ -315,20 +313,10 @@ export default function Courses() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">الفصل الدراسي</label>
-              <Select {...regEdit("semester")}>
-                <option value={0}>الفصل الأول (Fall)</option>
-                <option value={1}>الفصل الثاني (Spring)</option>
-                <option value={2}>الفصل الصيفي (Summer)</option>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
-              <Input type="number" min={1} max={6} {...regEdit("credits")} />
-              {editErrors.credits && <span className="text-xs text-destructive">{editErrors.credits.message}</span>}
-            </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">عدد الوحدات (1-6)</label>
+            <Input type="number" min={1} max={6} {...regEdit("credits")} />
+            {editErrors.credits && <span className="text-xs text-destructive">{editErrors.credits.message}</span>}
           </div>
 
           {isAdmin && (
@@ -437,8 +425,6 @@ function CourseCard({
               </div>
             </div>
             <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{course.semester || "—"}</span>
-              <span>•</span>
               <span dir="ltr">{course.academicYear}</span>
             </div>
           </div>
