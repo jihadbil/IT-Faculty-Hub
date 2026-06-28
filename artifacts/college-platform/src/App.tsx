@@ -21,6 +21,7 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import AdminDepartments from "@/pages/admin/departments";
 import AdminTeachers from "@/pages/admin/teachers";
 import AdminStudents from "@/pages/admin/students";
+import AdminUsers from "@/pages/admin/users";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import Profile from "@/pages/profile";
@@ -81,6 +82,9 @@ function ProtectedLayoutRoutes() {
         </Route>
         <Route path="/admin/departments">
           <Protected roles={["admin"]}><AdminDepartments /></Protected>
+        </Route>
+        <Route path="/admin/users">
+          <Protected roles={["admin"]}><AdminUsers /></Protected>
         </Route>
         <Route path="/admin/teachers">
           <Protected roles={["admin"]}><AdminTeachers /></Protected>

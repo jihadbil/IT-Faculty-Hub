@@ -56,9 +56,8 @@ function useAdminNav(): NavItem[] {
   const { data: unread } = useUnreadMessageCount();
   return [
     { href: "/admin", label: "لوحة المدير", icon: LayoutDashboard },
+    { href: "/admin/users", label: "إدارة المستخدمين", icon: ShieldCheck },
     { href: "/admin/departments", label: "الأقسام", icon: Building2 },
-    { href: "/admin/teachers", label: "الأساتذة", icon: Users },
-    { href: "/admin/students", label: "الطلاب", icon: UserRound },
     { href: "/admin/courses", label: "المواد الدراسية", icon: BookOpen },
     { href: "/admin/schedule", label: "جدول المحاضرات", icon: CalendarDays },
     { href: "/messaging", label: "المراسلات", icon: MessageSquare, badge: asNumber(unread?.count) },
