@@ -43,7 +43,7 @@ import {
   FilesTab,
   StudentsTab,
 } from "@/components/course-tabs";
-import { cn } from "@/lib/utils";
+import { cn, resolveAssetUrl } from "@/lib/utils";
 
 // ── Edit form schema ──
 const editCourseSchema = z.object({
@@ -481,7 +481,7 @@ function VideoCard({
       <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
         {video.streamUrl && (
           <a
-            href={video.streamUrl}
+            href={resolveAssetUrl(video.streamUrl)}
             target="_blank"
             rel="noreferrer"
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border hover:bg-muted text-foreground text-sm font-bold transition-colors"

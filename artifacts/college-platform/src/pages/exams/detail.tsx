@@ -27,9 +27,9 @@ import { examsApi, asNumber, normalizeQuestionType, type UpdateExamDto, type Uui
 import { cn } from "@/lib/utils";
 
 const Q_TYPE_LABEL: Record<string | number, string> = {
-  0: "اختيار من متعدد",
-  1: "صح أو خطأ",
-  2: "إجابة قصيرة",
+  1: "اختيار من متعدد",
+  2: "صح أو خطأ",
+  3: "إجابة قصيرة",
 };
 
 export default function ExamDetail() {

@@ -360,32 +360,32 @@ export interface RecordAttendanceDto {
 
 // ───────── Exams ─────────
 export const QuestionType = {
-  MultipleChoice: 0,
-  TrueFalse: 1,
-  ShortAnswer: 2,
-  Essay: 3,
+  MultipleChoice: 1,
+  TrueFalse: 2,
+  ShortAnswer: 3,
+  Essay: 4,
 } as const;
 export type QuestionTypeValue = number;
 
 const QUESTION_TYPE_STRING_MAP: Record<string, number> = {
-  multiplechoice: 0,
-  mcq: 0,
-  truefalse: 1,
-  shortanswer: 2,
-  essay: 3,
+  multiplechoice: 1,
+  mcq: 1,
+  truefalse: 2,
+  shortanswer: 3,
+  essay: 4,
 };
 
 export function normalizeQuestionType(qt: string | number): number {
   if (typeof qt === "number") return qt;
   const key = qt.toLowerCase().replace(/[_\s]/g, "");
-  return QUESTION_TYPE_STRING_MAP[key] ?? 0;
+  return QUESTION_TYPE_STRING_MAP[key] ?? 1;
 }
 
 export const QUESTION_TYPE_LABEL_AR: Record<number, string> = {
-  0: "اختيار من متعدد",
-  1: "صح/خطأ",
-  2: "إجابة قصيرة",
-  3: "مقالي",
+  1: "اختيار من متعدد",
+  2: "صح/خطأ",
+  3: "إجابة قصيرة",
+  4: "مقالي",
 };
 
 export interface ExamOptionResponseDto {
@@ -586,20 +586,34 @@ export interface NotificationResponseDto {
 
 // ───────── Files ─────────
 export const FileType = {
-  Lecture: 0,
-  Assignment: 1,
-  Reference: 2,
-  Syllabus: 3,
-  Other: 4,
+  Lecture: 1,
+  Assignment: 2,
+  Reference: 3,
+  Summary: 4,
+  Other: 5,
+  Syllabus: 6,
 } as const;
 export type FileTypeValue = (typeof FileType)[keyof typeof FileType];
 
-export const FILE_TYPE_LABEL_AR: Record<number, string> = {
-  0: "محاضرة",
-  1: "واجب",
-  2: "مرجع",
-  3: "خطة",
-  4: "أخرى",
+export const FILE_TYPE_LABEL_AR: Record<number | string, string> = {
+  1: "محاضرة",
+  2: "واجب",
+  3: "مرجع",
+  4: "ملخص",
+  5: "أخرى",
+  6: "خطة",
+  Lecture: "محاضرة",
+  Assignment: "واجب",
+  Reference: "مرجع",
+  Summary: "ملخص",
+  Other: "أخرى",
+  Syllabus: "خطة",
+  lecture: "محاضرة",
+  assignment: "واجب",
+  reference: "مرجع",
+  summary: "ملخص",
+  other: "أخرى",
+  syllabus: "خطة",
 };
 
 export interface CourseFileResponseDto {

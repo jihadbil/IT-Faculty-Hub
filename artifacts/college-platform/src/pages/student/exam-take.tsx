@@ -288,7 +288,7 @@ export default function StudentExamTake() {
                 </div>
               </div>
 
-              {(normalizeQuestionType(q.questionType) === 0 || normalizeQuestionType(q.questionType) === 1) && q.options && q.options.length > 0 && (
+              {(normalizeQuestionType(q.questionType) === 1 || normalizeQuestionType(q.questionType) === 2) && q.options && q.options.length > 0 && (
                 <div className="space-y-2 pr-11">
                   {q.options.map((opt) => {
                     const optId = Number(opt.id);
@@ -317,7 +317,7 @@ export default function StudentExamTake() {
                 </div>
               )}
 
-              {normalizeQuestionType(q.questionType) === 2 && (
+              {normalizeQuestionType(q.questionType) === 3 && (
                 <div className="pr-11">
                   <textarea
                     value={myAnswer?.textAnswer ?? ""}

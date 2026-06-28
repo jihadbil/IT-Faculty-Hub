@@ -22,7 +22,7 @@ import { Card, Badge, Button, Modal } from "@/components/ui/shared";
 import { useCourse, useCourseVideos, colorForCourse, useMyEnrollments } from "@/lib/queries";
 import { videosApi, enrollmentsApi, asNumber, type VideoLectureResponseDto } from "@/lib/external-api";
 import { AssessmentsTab, AttendanceTab, ExamsTab, FilesTab } from "@/components/course-tabs";
-import { cn } from "@/lib/utils";
+import { cn, resolveAssetUrl } from "@/lib/utils";
 
 type TabKey = "videos" | "files" | "assessments" | "attendance" | "exams";
 
@@ -192,7 +192,7 @@ export default function StudentCourse() {
                   <Card key={v.id} className="overflow-hidden hover:shadow-xl transition-shadow">
                     <div className="relative aspect-video bg-muted flex items-center justify-center group cursor-pointer" onClick={() => { setActiveVideo(v); recordView.mutate(v.id); }}>
                       {v.thumbnailUrl ? (
-                        <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
+                        <img src={resolveAssetUrl(v.thumbnailUrl)} alt={v.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center" style={{ background: color }}>
                           <PlayCircle className="w-16 h-16 text-white/80" />
@@ -246,11 +246,11 @@ export default function StudentCourse() {
           <div className="w-full max-w-4xl bg-black rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 bg-zinc-900 text-white">
               <h3 className="font-bold truncate">{activeVideo.title}</h3>
-              <a href={activeVideo.streamUrl} target="_blank" rel="noreferrer" className="text-white/70 hover:text-white text-sm flex items-center gap-1">
+              <a href={resolveAssetUrl(activeVideo.streamUrl)} target="_blank" rel="noreferrer" className="text-white/70 hover:text-white text-sm flex items-center gap-1">
                 <ExternalLink className="w-4 h-4" /> فتح
               </a>
             </div>
-            <video src={activeVideo.streamUrl} controls autoPlay className="w-full aspect-video bg-black" />
+            <video src={resolveAssetUrl(activeVideo.streamUrl)} controls autoPlay className="w-full aspect-video bg-black" />
           </div>
         </div>
       )}

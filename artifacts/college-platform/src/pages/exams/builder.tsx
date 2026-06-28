@@ -18,13 +18,13 @@ import { useAuth } from "@/lib/auth";
 import { examsApi, type CreateExamQuestionDto, type CreateExamOptionDto, type Uuid } from "@/lib/external-api";
 import { cn } from "@/lib/utils";
 
-const QType = { MCQ: 0, TrueFalse: 1, ShortAnswer: 2 } as const;
-type QTypeValue = 0 | 1 | 2;
+const QType = { MCQ: 1, TrueFalse: 2, ShortAnswer: 3 } as const;
+type QTypeValue = 1 | 2 | 3;
 
 const Q_LABELS: Record<QTypeValue, string> = {
-  0: "اختيار من متعدد",
-  1: "صح أو خطأ",
-  2: "إجابة قصيرة",
+  1: "اختيار من متعدد",
+  2: "صح أو خطأ",
+  3: "إجابة قصيرة",
 };
 
 interface OptionDraft {

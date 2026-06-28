@@ -5,7 +5,8 @@ import {
 } from "lucide-react";
 import { Card, Badge } from "@/components/ui/shared";
 import { useMyFiles, useMyEnrollments } from "@/lib/queries";
-import { type FilesQuery, type Uuid } from "@/lib/external-api";
+import { type FilesQuery, type Uuid, FILE_TYPE_LABEL_AR } from "@/lib/external-api";
+import { resolveAssetUrl, forceDownloadFile } from "@/lib/utils";
 
 function formatBytes(bytes: number | string): string {
   const n = typeof bytes === "string" ? Number(bytes) : bytes;
@@ -135,7 +136,7 @@ export default function StudentFiles() {
                     <BookOpen className="w-3 h-3 ms-1" />
                     {f.courseName}
                   </Badge>
-                  {f.category && <Badge variant="default" className="text-xs">{f.category}</Badge>}
+                  {f.category && <Badge variant="default" className="text-xs">{FILE_TYPE_LABEL_AR[f.category] ?? f.category}</Badge>}
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-2">
@@ -144,15 +145,14 @@ export default function StudentFiles() {
                   <span>{new Date(f.uploadedAt).toLocaleDateString("ar")}</span>
                 </div>
 
-                <a
-                  href={f.downloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 text-sm bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl p-2 transition-colors font-bold"
+                <button
+                  type="button"
+                  onClick={() => forceDownloadFile(resolveAssetUrl(f.downloadUrl), f.fileName)}
+                  className="flex items-center justify-center gap-2 text-sm bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl p-2 transition-colors font-bold w-full cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   تحميل
-                </a>
+                </button>
               </Card>
             ))}
           </div>

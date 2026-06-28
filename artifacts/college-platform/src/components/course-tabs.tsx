@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
+import { resolveAssetUrl, forceDownloadFile } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import {
@@ -64,7 +65,7 @@ import {
   useUsers,
 } from "@/lib/queries";
 
-const FILE_TYPES = [0, 1, 2, 3, 4];
+const FILE_TYPES = [1, 2, 3, 4, 5, 6];
 
 function formatBytes(n: number | string): string {
   const v = Number(n);
@@ -1107,7 +1108,7 @@ function FileCard({
   canEdit: boolean;
   onDelete: (id: number) => void;
 }) {
-  const label = FILE_TYPE_LABEL_AR[Number(file.fileType)] ?? "ملف";
+  const label = FILE_TYPE_LABEL_AR[file.fileType] ?? FILE_TYPE_LABEL_AR[Number(file.fileType)] ?? "ملف";
   return (
     <Card className="p-4 flex items-start gap-4 hover:border-primary/30 transition-all group">
       <div className="text-3xl shrink-0 mt-0.5">{mimeEmoji(file.mimeType)}</div>
@@ -1129,14 +1130,13 @@ function FileCard({
           </span>
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <a
-            href={file.downloadUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-muted text-foreground text-xs font-bold transition-colors"
+          <button
+            type="button"
+            onClick={() => forceDownloadFile(resolveAssetUrl(file.downloadUrl), file.fileName)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-muted text-foreground text-xs font-bold transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" /> تنزيل
-          </a>
+          </button>
           {canEdit && (
             <button
               onClick={() => onDelete(file.id)}
@@ -1164,7 +1164,7 @@ function UploadFileModal({
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [fileType, setFileType] = useState(0);
+  const [fileType, setFileType] = useState(1);
   const [file, setFile] = useState<File | null>(null);
   const [err, setErr] = useState("");
 
